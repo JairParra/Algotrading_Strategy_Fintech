@@ -1,3 +1,7 @@
+# Rproj files 
+.Rproj
+*.Rproj
+
 # History files
 .Rhistory
 .Rapp.history
