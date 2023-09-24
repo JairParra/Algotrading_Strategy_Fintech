@@ -13,6 +13,10 @@
 # User-specific files
 .Ruserdata
 
+# Log files 
+.log
+*.log
+
 # Example code in package build process
 *-Ex.R
 
