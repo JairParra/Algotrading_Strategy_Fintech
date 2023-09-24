@@ -1,0 +1,138 @@
+---
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
+  - \usepackage{amsthm}
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhead[CO,CE]{Hair Parra}
+  - \fancyfoot[CO,CE]{Notes by Hair Parra}
+  - \fancyfoot[LE,RO]{\thepage}
+title: "8. Unsupervised learning"
+author: "Hair Albeiro Parra Barrera"
+geometry: margin=1.3cm
+always_allow_html: true
+output: 
+    pdf_document: 
+      extra_dependencies: ["array", "amsmath","booktabs"]
+---
+
+\newtheorem{assumption}{Assumption}[assumption]
+\newtheorem{theorem}{Theorem}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{example}{Example}
+\newtheorem{remark*}{Remark}
+\newtheorem{aside*}{Aside}
+\newtheorem{exercise*}{Exercise}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=9, fig.height=6) 
+
+# configurations for plot 
+my_plot_hook <- function(x, options)
+  paste("\n", knitr::hook_plot_tex(x, options), "\n")
+knitr::knit_hooks$set(plot = my_plot_hook)
+```
+
+## Libraries 
+
+```{r, echo=FALSE}
+# Load the required packages
+library(TTR) 
+library(here)
+library(rvest)
+library(dplyr)
+library(quantmod)
+library(tidyverse)
+library(tidyquant)
+```
+
+
+# 0. Scraping the SP500
+
+In order to test the logic within the strategy, I have fetched functions that retrieve a number of sample stocks by sector from the SP500. 
+
+```{r}
+# to obtain relative paths
+library(here)
+
+# Load code into environment 
+source(here("functions", "fetch_sp500_sectors.R"))
+```
+
+
+### 0.0.1 SP500 Economic Sectors
+
+The following function fetches and extract the economic sectors from the SP500, taken from [Wikipedia](https://en.wikipedia.org/wiki/List_of_S%26P_500_companies). 
+
+
+```{r, message=FALSE}
+# fetch the sectors as a dataframe 
+sp500_sectors <- f_get_sp500_sectors()
+head(sp500_sectors)
+```
+
+### 0.0.2 SP500 Sector Weight
+
+
+```{r}
+# Load the required packages
+library(tidyverse)
+library(tidyquant)
+
+# Get the SP500 index data from Yahoo Finance
+sp500 <- tq_index("SP500")
+
+# wrap into a single argument funciton 
+fetch_sp500_sector_data <- function(x){f_fetch_sector_data(x, sp500, sp500_sectors)}
+
+# call the function 
+fetch_sp500_sector_data("Information Technology")
+```
+
+### 0.0.3 Retrieving top sectors and stocks 
+
+Pack everything into one function to retrieve all the data 
+
+```{r}
+# Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
+sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 10, only_tickers=TRUE)
+sector_list
+```
+This logic is implemented under **functions/fetch_sp500_sectors.R**
+
+
+### 0.0.4 Retrieving top sectors and stocks 
+
+```{r}
+# function to fetch all the information for one ticker into a nice xts dataframe 
+sp500_stocks <- lapply(sector_list, f_fetch_all_tickers, start_date="2018-01-01", end_date="2022-12-01") 
+
+# update format so that it becomes a named list of lists 
+sp500_stocks <- lapply(sp500_stocks, function(sector_l){
+  setNames(sector_l$stock_data, sector_l$tickers)
+  }
+) 
+```
+
+```{r}
+# Show the available sectors 
+names(sp500_stocks)
+```
+```{r}
+# Show available stocks for Industrials 
+names(sp500_stocks$Industrials)
+```
+
+```{r}
+# access the xts of the stocks in industrials 
+sp500_stocks$Industrials$ADP
+```
+
+
+
+
+
