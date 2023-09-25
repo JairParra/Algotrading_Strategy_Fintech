@@ -8,7 +8,7 @@ header-includes:
   - \fancyhead[CO,CE]{Hair Parra}
   - \fancyfoot[CO,CE]{Notes by Hair Parra}
   - \fancyfoot[LE,RO]{\thepage}
-title: "8. Unsupervised learning"
+title: "Strategy Design (ML Fin Data - Project 1)"
 author: "Hair Albeiro Parra Barrera"
 geometry: margin=1.3cm
 always_allow_html: true
@@ -103,7 +103,10 @@ This logic is implemented under **functions/fetch_sp500_sectors.R**
 
 ```{r}
 # function to fetch all the information for one ticker into a nice xts dataframe 
-sp500_stocks <- lapply(sector_list, f_fetch_all_tickers, start_date="2018-01-01", end_date="2022-12-01") 
+sp500_stocks <- lapply(sector_list, 
+                       f_fetch_all_tickers, 
+                       start_date="2018-01-01",
+                       end_date="2022-12-01") 
 
 # update format so that it becomes a named list of lists 
 sp500_stocks <- lapply(sp500_stocks, function(sector_l){
@@ -123,18 +126,116 @@ names(sp500_stocks$Industrials)
 
 ```{r}
 # access the xts of the stocks in industrials 
-sp500_stocks$Industrials$ADP
+head(sp500_stocks$Industrials$ADP)
 ```
 
 # 1. Backtesting Logic 
+
+### Adding a numeric index
 
 First, we need to create a corresponding index for each week: 
 
 ```{r}
 # count number of weeks in data from one of the dataframes 
 sample_xts <- sp500_stocks$Industrials$ADP
-sample_xts
+head(sample_xts)
 ```
+
+```{r}
+# month index are assigned automatically 
+sample_xts[, c( "month_index")]
+```
+
+
+
+### splitting data by week 
+
+Initially, the idea was to split week-by-week, however, since we have to rebalance everymonth, this might lead to inconsistent results. Therefore, here I'm splitting the data week by week: 
+
+```{r}
+library(xts)
+
+# spli by months 
+sample_xts_by_month <- split.xts(sample_xts, f= "months")
+names(sample_xts_by_month)
+length(names(sample_xts_by_month)) # total number of months of data
+```
+## BACKTESTING_PROCEDURE
+
+1. Assume we have $N_{years}$ years of weekly data, giving a total of $N_{months}$ many months. 2. We want to fix a window of $N_{W} = 12$ months at the time (i.e. a year of data). 
+3. The total number of runs is given by 
+
+$$
+N^{runs} = \left\lfloor 
+    \dfrac{N_{months} - N_W}{s} 
+\right\rfloor
+$$
+, where $s=1$ is the number of months to move at the time (because of monthly rebalance). 
+
+In our case, this gives 
+
+$$
+N^{runs} = \left\lfloor 
+    \dfrac{59 - 12}{1} 
+\right\rfloor
+= 47 
+$$
+i.e., we can move 47 times when predicting one week at the time, starting with having all the data until month 12. 
+
+```{r}
+# Set up backtesting simulation parameters
+sample_xts <- sp500_stocks$Industrials$ADP
+sectors <- names(sp500_stocks) 
+
+N_months <- length(names(split.xts(sample_xts, f= "months")))
+N_window <- 12 
+N_runs <- floor((N_months - N_window)/1)
+N_sector_stocks <- 3 
+
+# setup variables to record results 
+portfolio <- rep(NA, length(sectors)*N_sector_stocks)
+weights <- rep(1/length(portfolio), length(portfolio)) # initialize to 1/n
+
+# Initiate backtesting 
+print("BACKTESTING")
+
+# for every run (sliding window of time to consider)  
+for(tau in seq(N_runs)){
+  # close any positions 
+  print(paste0("(tau=", tau, ") CLOSE all positions."))
+  
+  # Calculate and record profit-loss 
+  print("P/L:")
+  
+  # keep index counter for sectors 
+  i_sector <- 1
+  
+  # loop through all the sectors 
+  for(G in sectors){
+    # execute sector procedure 
+    print(paste0("    SECTOR_PROCEDURE(G=", G, ", tau=",tau, ")"))
+    
+    # return top 3 best stocks according to procedure 
+    top_sector_stocks <- sample(names(sp500_stocks[[G]]), 3 )
+    
+    # assign best stocks to portfolio (NEED TO UPDATE LOGIC!)
+    i_replace <- c(i_sector, i_sector+1, i_sector+2)
+    portfolio[i_replace] <- top_sector_stocks
+    i_sector <- i_sector + 3
+  }
+  
+  # Display selected portfolio tickers
+  print("Cur Portfolio:")
+  print(portfolio)
+  
+  # Optimize portfolio weights using modified min_variance 
+  print("OPTIMIZE_PORTFOLIO(portfolio)")
+  print("LONG PORTFOLIO()")
+  print(paste(rep("-", 75), collapse = ""))
+}
+```
+
+
 
 
 

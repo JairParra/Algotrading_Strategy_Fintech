@@ -16,6 +16,8 @@
 
 # List of packages to automatically install 
 proj_packages <- c(
+  "xts", 
+  "zoo", 
   "TTR", 
   "here", 
   "rvest", 

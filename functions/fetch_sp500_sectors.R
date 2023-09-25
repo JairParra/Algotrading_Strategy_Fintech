@@ -309,8 +309,19 @@ f_fetch_ind_base <- function(ticker, from, to){
                  "emv", "macd", "mfi", "sar", "smi", "volat")
   names(df_ticker) <- col_names
   
-  # return the object 
-  df_ticker
+  # convert to xts format and drop the date column 
+  xts_ticker <- xts(df_ticker, order.by = as.Date(df_ticker$date))
+  
+  # drop the useless date column 
+  xts_ticker <- xts_ticker[, colnames(xts_ticker) != "date"]
+  
+  # assign date numeric index 
+  source(here("functions", "data_utils.R"))
+  suppressWarnings(
+    xts_ticker <- assign_int_month_index(xts_ticker)
+  )
+
+  return(xts_ticker)
 }
 
 
