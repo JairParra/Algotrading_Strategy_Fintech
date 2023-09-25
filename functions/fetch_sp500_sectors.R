@@ -1,14 +1,29 @@
 ################################################################################
-## fetch_sp500_sectors.R
-##   Implements logic to retrieve data from the top n economic sectors in the SP500
-##   with highest weight distribution, and also the top n stocks in each sector.
-##
-## @author: Hair Parra
+# fetch_sp500_sectors.R
+#   Implements logic to retrieve data from the top n economic sectors in the SP500
+#   with highest weight distribution, and also the top n stocks in each sector.
+#
+# @author: Hair Parra
 ################################################################################
 
 #########################
 ### 1. Main Functions ###
 #########################
+
+f_load_sp500 <- function(){ 
+  require(tidyquant)
+  
+  # load the dSP500 components via the yahoo finance API
+  sp500 <- tq_index("SP500")
+  
+  # remove the US DOLLAR (not a company), LOW generates problems
+  sp500 <- sp500[(!sp500$symbol == "-") & (!sp500$symbol == "LOW"), ]  
+  
+  return(sp500)
+}
+
+# load into env 
+sp500 <- f_load_sp500()
 
 f_get_sp500_sectors <- function(){
   ## Returns the SP500 components and their respective economic sectors
@@ -33,6 +48,9 @@ f_get_sp500_sectors <- function(){
   
   # Combine the tickers and sectors into a dataframe
   sp500_sectors <- data.frame(tickers, sectors)
+  
+  # remove problematic ticks 
+  sp500_sectors <- sp500_sectors[(!sp500_sectors$tickers == "-") & (!sp500_sectors$tickers == "LOW"), ]  
   
   # Print the dataframe
   return(sp500_sectors)
@@ -81,6 +99,9 @@ f_retrieve_top_sp500 <- function(top_n_sectors = 11, top_n_stocks = 10, only_tic
   require(rvest)
   require(tidyverse)
   require(tidyquant)
+  
+  # load the sp500 data
+  sp500 <- f_load_sp500()
   
   # Fetch tickers and sectors  from the SP500 
   sp500_sectors <- f_get_sp500_sectors()
@@ -162,8 +183,27 @@ f_fetch_ind_base <- function(ticker, from, to){
     ADX(HLC(x))[, 'ADX']
   
   # Calculate Aroon Oscillator
-  f_Aroon <- function(x)
-    aroon(cbind(Hi(x), Lo(x)), n = 2)$oscillator
+  f_Aroon <- function(x){
+    tryCatch(
+      {
+        aroon(cbind(Hi(x), Lo(x)), n = 2)$oscillator
+      }, 
+      error = function(e){
+        stock <- getSymbols(ticker,
+                            auto.assign = FALSE,
+                            from = from,
+                            to = to)
+        
+        
+        print(ticker) 
+        print(stock)
+        print(x)
+        print(Hi(x))
+        print(Lo(x))
+        aroon(cbind(Hi(x), Lo(x)), n = 2)$oscillator
+      }
+    )
+  }
   
   # Calculate Bollinger Bands percentage B
   f_BB <- function(x)
@@ -242,7 +282,7 @@ f_fetch_ind_base <- function(ticker, from, to){
     date = index(stock_wed_rets),
     direction = factor(direction, levels = c("Up", "Down")),
     stock_close_lead = stock_adjclose_lead,
-    coredata(lag(stock_wed_rets, k = 0:3)),
+    coredata(stats::lag(stock_wed_rets, k = 0:3)),
     atr = coredata(f_ATR(stock_wed)),
     adx = coredata(f_ADX(stock_wed)),
     aroon = coredata(f_Aroon(stock_wed)),
@@ -269,6 +309,7 @@ f_fetch_ind_base <- function(ticker, from, to){
                  "emv", "macd", "mfi", "sar", "smi", "volat")
   names(df_ticker) <- col_names
   
+  # return the object 
   df_ticker
 }
 
@@ -277,15 +318,15 @@ f_fetch_ind_base <- function(ticker, from, to){
 # and packs it into a list (or a list of lists if nested_list=TRUE,)
 f_fetch_all_tickers <- function(tickers, 
                                 start_date = "2000-01-01", 
-                                end_date = "2019-12-31",
-                                nested_list=TRUE){ 
+                                end_date = "2019-12-31"){ 
+  
   
   # Use lapply to download all the tickers data at once for dates
   # between start_date and end_date
-  list_stock_data <- lapply(tickers, getSymbols,
-                            auto.assign = FALSE,
+  list_stock_data <- lapply(tickers,
+                            f_fetch_ind_base,
                             from = as.Date(start_date), 
-                            end_date = as.Date(end_date))
+                            to = as.Date(end_date))
   
   # Create a list containing the tickers (stock names) and the stock data
   list_stock_data <- list(tickers = tickers,
@@ -293,3 +334,4 @@ f_fetch_all_tickers <- function(tickers,
   
   return(list_stock_data)
 }
+

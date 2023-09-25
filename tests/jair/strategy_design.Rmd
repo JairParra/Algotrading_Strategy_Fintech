@@ -39,7 +39,7 @@ knitr::knit_hooks$set(plot = my_plot_hook)
 
 ## Libraries 
 
-```{r, echo=FALSE}
+```{r, echo=FALSE, message=FALSE}
 # Load the required packages
 library(TTR) 
 library(here)
@@ -75,22 +75,16 @@ sp500_sectors <- f_get_sp500_sectors()
 head(sp500_sectors)
 ```
 
+
 ### 0.0.2 SP500 Sector Weight
 
 
 ```{r}
-# Load the required packages
-library(tidyverse)
-library(tidyquant)
-
-# Get the SP500 index data from Yahoo Finance
-sp500 <- tq_index("SP500")
-
 # wrap into a single argument funciton 
 fetch_sp500_sector_data <- function(x){f_fetch_sector_data(x, sp500, sp500_sectors)}
 
 # call the function 
-fetch_sp500_sector_data("Information Technology")
+head(fetch_sp500_sector_data("Information Technology"))
 ```
 
 ### 0.0.3 Retrieving top sectors and stocks 
@@ -99,7 +93,7 @@ Pack everything into one function to retrieve all the data
 
 ```{r}
 # Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
-sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 10, only_tickers=TRUE)
+sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_tickers=TRUE)
 sector_list
 ```
 This logic is implemented under **functions/fetch_sp500_sectors.R**
@@ -130,6 +124,16 @@ names(sp500_stocks$Industrials)
 ```{r}
 # access the xts of the stocks in industrials 
 sp500_stocks$Industrials$ADP
+```
+
+# 1. Backtesting Logic 
+
+First, we need to create a corresponding index for each week: 
+
+```{r}
+# count number of weeks in data from one of the dataframes 
+sample_xts <- sp500_stocks$Industrials$ADP
+sample_xts
 ```
 
 

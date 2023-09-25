@@ -16,9 +16,15 @@
 
 # List of packages to automatically install 
 proj_packages <- c(
+  "TTR", 
+  "here", 
+  "rvest", 
+  "dplyr", 
   "quantmod", 
+  "data.table", 
+  "tidyverse", 
+  "tidyquant", 
   "PerformanceAnalytics", 
-  "data.table"
 )
 
 ####################
