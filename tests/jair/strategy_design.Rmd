@@ -101,7 +101,7 @@ This logic is implemented under **functions/fetch_sp500_sectors.R**
 
 ### 0.0.4 Retrieving top sectors and stocks 
 
-```{r}
+```{r, message=FALSE}
 # function to fetch all the information for one ticker into a nice xts dataframe 
 sp500_stocks <- lapply(sector_list, 
                        f_fetch_all_tickers, 
@@ -138,7 +138,7 @@ First, we need to create a corresponding index for each week:
 ```{r}
 # count number of weeks in data from one of the dataframes 
 sample_xts <- sp500_stocks$Industrials$ADP
-head(sample_xts)
+head(sample_xts, 10)
 ```
 
 ```{r}
@@ -186,18 +186,36 @@ i.e., we can move 47 times when predicting one week at the time, starting with h
 # Set up backtesting simulation parameters
 sample_xts <- sp500_stocks$Industrials$ADP
 sectors <- names(sp500_stocks) 
+N_sector_stocks <- 3 # 
 
+# Formula parameters
+slide <- 1 
 N_months <- length(names(split.xts(sample_xts, f= "months")))
-N_window <- 12 
-N_runs <- floor((N_months - N_window)/1)
-N_sector_stocks <- 3 
+N_window <- 12 # number of months in size for each window 
+N_runs <- floor((N_months - N_window)/slide)
 
-# setup variables to record results 
-portfolio <- rep(NA, length(sectors)*N_sector_stocks)
-weights <- rep(1/length(portfolio), length(portfolio)) # initialize to 1/n
+# setup initial portfolio tracking variables 
+initial_capital <- 500000
+num_tickers <- length(sectors)*N_sector_stocks
+initial_tickers <- rep(NA, num_tickers)
+weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
+returns <- rep(NA, N_runs)
+
+# repack the portfolio 
+portfolio <- list(tickers = initial_tickers, 
+                  weights = weights, 
+                  capital = initial_capital, 
+                  returns = returns
+                  )
+portfolio
+```
+
+```{r}
+print(paste(rep("-", 100), collapse = ""))
 
 # Initiate backtesting 
 print("BACKTESTING")
+print("")
 
 # for every run (sliding window of time to consider)  
 for(tau in seq(N_runs)){
@@ -205,11 +223,18 @@ for(tau in seq(N_runs)){
   print(paste0("(tau=", tau, ") CLOSE all positions."))
   
   # Calculate and record profit-loss 
-  print("P/L:")
-  
+  print("(1) COMPUTE_P/L(portfolio)")
+  portfolio$capital <- portfolio$capital * (1 + runif(1, -0.05, 0.10))
+  print(paste0("--> Capital:", portfolio$capital, "$"))
+
   # keep index counter for sectors 
   i_sector <- 1
   
+  # current portf 
+  cur_tickers <- rep(NA, num_tickers)
+  
+  print("")
+  print("(2) PORTFOLIO_LOOP:")
   # loop through all the sectors 
   for(G in sectors){
     # execute sector procedure 
@@ -220,20 +245,31 @@ for(tau in seq(N_runs)){
     
     # assign best stocks to portfolio (NEED TO UPDATE LOGIC!)
     i_replace <- c(i_sector, i_sector+1, i_sector+2)
-    portfolio[i_replace] <- top_sector_stocks
+    cur_tickers[i_replace] <- top_sector_stocks
     i_sector <- i_sector + 3
   }
+
+  # Assign tickers for this simulation
+  portfolio$tickers <- as.vector(cur_tickers)
   
   # Display selected portfolio tickers
   print("Cur Portfolio:")
-  print(portfolio)
+  print(portfolio$tickers)
   
   # Optimize portfolio weights using modified min_variance 
-  print("OPTIMIZE_PORTFOLIO(portfolio)")
-  print("LONG PORTFOLIO()")
-  print(paste(rep("-", 75), collapse = ""))
+  print("")
+  print("(3) OPTIMIZE_PORTFOLIO(portfolio)")
+  print("weights: ") 
+  print(paste(" ", portfolio$weights))
+  print("")
+  print("(4) LONG PORTFOLIO()")
+  
+  
+  # Separate similuation (over)
+  print(paste(rep("-", 100), collapse = ""))
 }
 ```
+
 
 
 
