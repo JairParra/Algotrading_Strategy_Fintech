@@ -107,12 +107,6 @@ sp500_stocks <- lapply(sector_list,
                        f_fetch_all_tickers, 
                        start_date="2018-01-01",
                        end_date="2022-12-01") 
-
-# update format so that it becomes a named list of lists 
-sp500_stocks <- lapply(sp500_stocks, function(sector_l){
-  setNames(sector_l$stock_data, sector_l$tickers)
-  }
-) 
 ```
 
 ```{r}
@@ -145,8 +139,6 @@ head(sample_xts, 10)
 # month index are assigned automatically 
 sample_xts[, c( "month_index")]
 ```
-
-
 
 ### splitting data by week 
 
@@ -211,10 +203,11 @@ portfolio
 ```
 
 ```{r}
-print(paste(rep("-", 100), collapse = ""))
 
 # Initiate backtesting 
+print(paste(rep("-", 100), collapse = ""))
 print("BACKTESTING")
+print(paste(rep("-", 100), collapse = ""))
 print("")
 
 # for every run (sliding window of time to consider)  

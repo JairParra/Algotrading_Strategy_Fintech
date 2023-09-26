@@ -169,6 +169,7 @@ f_retrieve_top_sp500 <- function(top_n_sectors = 11, top_n_stocks = 10, only_tic
 ## book by David Ardia @ HEC Montreal. 
 
 
+
 f_fetch_ind_base <- function(ticker, from, to){
   ############## Indicators ########################
   
@@ -184,25 +185,7 @@ f_fetch_ind_base <- function(ticker, from, to){
   
   # Calculate Aroon Oscillator
   f_Aroon <- function(x){
-    tryCatch(
-      {
-        aroon(cbind(Hi(x), Lo(x)), n = 2)$oscillator
-      }, 
-      error = function(e){
-        stock <- getSymbols(ticker,
-                            auto.assign = FALSE,
-                            from = from,
-                            to = to)
-        
-        
-        print(ticker) 
-        print(stock)
-        print(x)
-        print(Hi(x))
-        print(Lo(x))
-        aroon(cbind(Hi(x), Lo(x)), n = 2)$oscillator
-      }
-    )
+      aroon(cbind(Hi(x), Lo(x)), n = 2)$oscillator
   }
   
   # Calculate Bollinger Bands percentage B
@@ -255,7 +238,6 @@ f_fetch_ind_base <- function(ticker, from, to){
   # using PerformanceAnalytics library
   # indexwday() == 3 corresponds to wednesday
   stock_wed <- stock[.indexwday(stock) == 3]
-  
   stock_wed_rets <-
     PerformanceAnalytics::Return.calculate(prices = stock_wed,
                                            method = "log")[, 6]
@@ -328,9 +310,8 @@ f_fetch_ind_base <- function(ticker, from, to){
 # fetches the xts data for all the stocks above at once 
 # and packs it into a list (or a list of lists if nested_list=TRUE,)
 f_fetch_all_tickers <- function(tickers, 
-                                start_date = "2000-01-01", 
-                                end_date = "2019-12-31"){ 
-  
+                       start_date = "2000-01-01", 
+                       end_date = "2019-12-31"){ 
   
   # Use lapply to download all the tickers data at once for dates
   # between start_date and end_date
@@ -343,6 +324,10 @@ f_fetch_all_tickers <- function(tickers,
   list_stock_data <- list(tickers = tickers,
                           stock_data = list_stock_data)
   
+  # transform list format 
+  list_stock_data <- setNames(list_stock_data$stock_data, list_stock_data$tickers)
+  
   return(list_stock_data)
+  
 }
 
