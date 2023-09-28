@@ -55,3 +55,7 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Other files 
+-MSI
+*MSI*
