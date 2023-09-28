@@ -123,6 +123,8 @@ names(sp500_stocks$Industrials)
 head(sp500_stocks$Industrials$ADP)
 ```
 
+
+
 # 1. Backtesting Logic 
 
 ### Adding a numeric index
@@ -131,8 +133,8 @@ First, we need to create a corresponding index for each week:
 
 ```{r}
 # count number of weeks in data from one of the dataframes 
-sample_xts <- sp500_stocks$Industrials$ADP
-head(sample_xts, 10)
+sample_xts <- sp500_stocks$Industrials$CSX
+tail(sample_xts, 10)
 ```
 
 ```{r}
@@ -161,6 +163,7 @@ $$
 N^{runs} = \left\lfloor 
     \dfrac{N_{months} - N_W}{s} 
 \right\rfloor
++ 1 
 $$
 , where $s=1$ is the number of months to move at the time (because of monthly rebalance). 
 
@@ -170,15 +173,18 @@ $$
 N^{runs} = \left\lfloor 
     \dfrac{59 - 12}{1} 
 \right\rfloor
-= 47 
++ 1 
+= 48 
 $$
-i.e., we can move 47 times when predicting one week at the time, starting with having all the data until month 12. 
+i.e., we can move 47 times when predicting one month at the time, starting with having all the data until month 12. 
+
+That is, $\tau = 1, \dots, 48$
 
 ```{r}
 # Set up backtesting simulation parameters
 sample_xts <- sp500_stocks$Industrials$ADP
 sectors <- names(sp500_stocks) 
-N_sector_stocks <- 3 # 
+N_sector_best_stocks <- 3 
 
 # Formula parameters
 slide <- 1 
@@ -188,7 +194,7 @@ N_runs <- floor((N_months - N_window)/slide)
 
 # setup initial portfolio tracking variables 
 initial_capital <- 500000
-num_tickers <- length(sectors)*N_sector_stocks
+num_tickers <- length(sectors)*N_sector_best_stocks
 initial_tickers <- rep(NA, num_tickers)
 weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
 returns <- rep(NA, N_runs)
@@ -203,7 +209,6 @@ portfolio
 ```
 
 ```{r}
-
 # Initiate backtesting 
 print(paste(rep("-", 100), collapse = ""))
 print("BACKTESTING")
@@ -257,11 +262,149 @@ for(tau in seq(N_runs)){
   print("")
   print("(4) LONG PORTFOLIO()")
   
-  
   # Separate similuation (over)
   print(paste(rep("-", 100), collapse = ""))
 }
 ```
+
+
+## SECTOR_PROCEDURE
+
+1. Sector $G$ contains tickers $\{S_1,S_1,\dots,  S_{|G|}\}$, where $|G|$= number of stocks per sector (before selection). 
+2. For each ticker, want to calculate **current window:**
+
+$$
+\left[
+  t_1 = \text{week } W_{s\times\tau}
+  \;,\;
+  t_{12} = \text{week } W_{s\times\tau + 11}
+\right]
+$$ 
+
+e.g. with $s=1$ (slide one month at the time)
+
+$$
+\begin{cases}
+\tau = 1 \implies [t_1 = W_{1} \;,\; t_{12} = W_{12}] \\ 
+\tau = 2 \implies [t_1 = W_{2} \;,\; t_{12} = W_{13}] \\ 
+\vdots \\ 
+\tau = i \implies [t_1 = W_{i} \;,\; t_{12} = W_{i+11}] \\ 
+\vdots \\ 
+\tau = 48 \implies [t_1 = W_{48} \;,\; t_{12} = W_{59}]
+\end{cases}
+$$
+
+
+
+### EXTRACT_STATIC_FEATURES() 
+
+We had a set of features for some stock: 
+
+
+```{r}
+# sample stock dataframe
+sample_xts <- sp500_stocks$Industrials$ADP
+head(sample_xts, 5)
+```
+
+
+```{r}
+# source the feature engineering file 
+library("here")
+source(here("functions", "feature_engineering.R"))
+
+# test out for a sample run  
+tau = 3 # run number 3
+sample_xts_train_val <- f_extract_train_val_features(sample_xts, tau=tau) # extract features
+
+# display some columns for the extracted data
+head(sample_xts_train_val$train[,c("direction_lead", "clv", "volat", "month_index")]) 
+print("")
+head(sample_xts_train_val$val[,c("direction_lead", "clv", "volat", "month_index")])
+```
+
+
+### SECTOR PROCEDURE 
+
+```{r}
+SECTOR_PROCEDURE <- function(G, tau){ 
+  ## 
+  ## Params: 
+  ##  - G (str): Economic sector name; will be used to fetch the  List of lists 
+  ## which are the pre-selected stocks for that sector.
+  ##  - tau (numeric): Integer that corresponds to the actual run of the backtest. 
+  ## 
+  
+  print(paste0("SECTOR_PROCEDURE(G=", G, ", tau=",tau, ")"))
+  
+  # retrieve sector data 
+  sector_data <- sp500_stocks[[G]]
+  
+  # stocks for sector provided 
+  sector_tickers <- names(sector_data)
+  
+  # to store subset features for window 
+  sector_stocks_window <- rep(NA, length(sector_tickers)) 
+  names(sector_stocks_window) <- sector_tickers
+  
+  # extract static train-val for all stocks 
+  list_train_val_sector <- lapply(sector_data, f_extract_train_val_features, tau=tau)
+  
+  # return top 3 best stocks according to modelling procedure
+  print("  MODELLING_PROCEDURE()")
+  top_sector_stocks <- sample(names(sp500_stocks[[G]]), 3 )
+
+  return(list_train_val_sector) # not actual return value!
+  # return(top_sector_stocks)
+}
+
+# peform the sector procedure 
+G = names(sp500_stocks)[[1]]
+tau = 5
+sector_stocks_window <- SECTOR_PROCEDURE(G, tau)
+```
+
+```{r}
+names(sector_stocks_window) # names are tickers, values are list of train-val xts
+names(sector_stocks_window$ADP) # names are train and val, value for each are xts
+head(sector_stocks_window$CAT$train, 3) # xts object subset
+print("") 
+tail(sector_stocks_window$CAT$val, 3)
+```
+## EXTRACT_DYNAMIC_FEATURES 
+
+```{r}
+# add GARCH features only 
+sample_xts_with_garch <- f_add_garch_forecast(sample_xts, volat_col="volat")
+
+# display 
+tail(sample_xts_with_garch, 3)
+```
+
+```{r}
+# Example usage
+sample_xts_with_arima <- f_add_arima_features(sample_xts_with_garch, 
+                                              return_col="realized_returns")
+tail(sample_xts_with_arima)
+```
+
+### Adding the dynamic features to any stock xts subset
+
+```{r}
+# add all the features to the sample data 
+sample_xts_full_feats <- f_extract_dynamic_features(sample_xts) 
+head(sample_xts_full_feats)
+```
+
+
+
+
+
+
+
+
+
+
 
 
 

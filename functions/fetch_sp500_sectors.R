@@ -11,8 +11,7 @@
 #########################
 
 # reqruired code from external file
-source(here("functions", "data_utils.R"))
-
+source(here("functions", "feature_engineering.R"))
 
 #########################
 ### 1. Main Functions ###
@@ -259,21 +258,21 @@ f_fetch_ind_base <- function(ticker, from, to){
   base_name <- tolower(gsub("[[:punct:]]", "", ticker))
   
   # Create 1 week forward (realized) returns by shifting the returns by a period
-  stock_adjclose_lead <- as.xts(data.table::shift(stock_wed_rets, type = "lead"))
+  realized_returns <- as.xts(data.table::shift(stock_wed_rets, type = "lead")) # stock_adjclose_lead
   
   # Name the column using the base_name variable
-  colnames(stock_adjclose_lead)[1] <- paste0(base_name,"_adjclose_lead")
+  colnames(realized_returns)[1] <- paste0(base_name,"_adjclose_lead")
   
   # Create a 1 week forward (realized) stock returns direction
   direction <- rep(NA, nrow(stock_wed_rets))
-  direction[stock_adjclose_lead > 0.] = 1  # UP 
-  direction[stock_adjclose_lead <= 0.] = 0  # DOWN
+  direction[realized_returns > 0.] = 1  # UP 
+  direction[realized_returns <= 0.] = -1  # DOWN
   
   # Create data.frame with output variable and predictors
   df_ticker <- data.frame(
     date = index(stock_wed_rets),
-    direction = factor(direction, levels = c(1, 0)),
-    stock_close_lead = stock_adjclose_lead,
+    direction = factor(direction, levels = c(1, -1)),
+    stock_close_lead = realized_returns,
     coredata(stats::lag(stock_wed_rets, k = 0:3)),
     atr = coredata(f_ATR(stock_wed)),
     adx = coredata(f_ADX(stock_wed)),
@@ -292,7 +291,7 @@ f_fetch_ind_base <- function(ticker, from, to){
   # Rename the various columns using the base_name and the technical indicators names
   base_name <- tolower(gsub("[[:punct:]]", "", ticker))
   col_names <- c("date", "direction_lead", 
-                 paste0(base_name,"_adjclose_lead"),
+                 "realized_returns",
                  paste0(base_name,"_adjclose_lag0"),
                  paste0(base_name,"_adjclose_lag1"),
                  paste0(base_name,"_adjclose_lag2"),
@@ -309,7 +308,7 @@ f_fetch_ind_base <- function(ticker, from, to){
   
   # assign date numeric index 
   suppressWarnings(
-    xts_ticker <- assign_int_month_index(xts_ticker)
+    xts_ticker <- f_assign_int_month_index(xts_ticker)
   )
 
   return(xts_ticker)

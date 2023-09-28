@@ -23,6 +23,7 @@ proj_packages <- c(
   "rvest", 
   "dplyr", 
   "quantmod", 
+  "forecast", 
   "data.table", 
   "tidyverse", 
   "tidyquant", 
