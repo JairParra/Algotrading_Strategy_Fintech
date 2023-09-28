@@ -7,6 +7,14 @@
 ################################################################################
 
 #########################
+### 0. Setup ###
+#########################
+
+# reqruired code from external file
+source(here("functions", "data_utils.R"))
+
+
+#########################
 ### 1. Main Functions ###
 #########################
 
@@ -28,6 +36,7 @@ sp500 <- f_load_sp500()
 f_get_sp500_sectors <- function(){
   ## Returns the SP500 components and their respective economic sectors
   ## by fetching the information from wikipedia. 
+
   
   # load the rvest package
   require(rvest)
@@ -86,9 +95,10 @@ f_fetch_sp500_sector_data <- function(x){
 }
 
 
-# function that retrieves the top 10 stocks (and data) with highest weight for every 
-# economic sector in the SP500, based on weight allocated. 
+
 f_retrieve_top_sp500 <- function(top_n_sectors = 11, top_n_stocks = 10, only_tickers=TRUE){
+  ## function that retrieves the top 10 stocks (and data) with highest weight for every 
+  ## economic sector in the SP500, based on weight allocated. 
   ## Params: 
   ##  - top_n_sectors (numeric): Retrieve top n sectors with highest weights in the sp500
   ##  - top_n_stocks (numeric): Retrieve top n stocks per sector with highest weight in that sector
@@ -256,13 +266,13 @@ f_fetch_ind_base <- function(ticker, from, to){
   
   # Create a 1 week forward (realized) stock returns direction
   direction <- rep(NA, nrow(stock_wed_rets))
-  direction[stock_adjclose_lead > 0.] = "Up"
-  direction[stock_adjclose_lead <= 0.] = "Down"
+  direction[stock_adjclose_lead > 0.] = 1  # UP 
+  direction[stock_adjclose_lead <= 0.] = 0  # DOWN
   
   # Create data.frame with output variable and predictors
   df_ticker <- data.frame(
     date = index(stock_wed_rets),
-    direction = factor(direction, levels = c("Up", "Down")),
+    direction = factor(direction, levels = c(1, 0)),
     stock_close_lead = stock_adjclose_lead,
     coredata(stats::lag(stock_wed_rets, k = 0:3)),
     atr = coredata(f_ATR(stock_wed)),
@@ -298,7 +308,6 @@ f_fetch_ind_base <- function(ticker, from, to){
   xts_ticker <- xts_ticker[, colnames(xts_ticker) != "date"]
   
   # assign date numeric index 
-  source(here("functions", "data_utils.R"))
   suppressWarnings(
     xts_ticker <- assign_int_month_index(xts_ticker)
   )
