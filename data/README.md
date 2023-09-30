@@ -2,10 +2,20 @@
 
 This folder contains all the raw data used in this project. 
 
-## Getting the data 
+### Instructions 
 
-For this project, we used ***source*** to extract our raw data from. The features directly obtained were `['open', 'close', 'high', 'low', ...]`, although there was additional preprocessing involved. 
+The data comes into a zip file. please unzip and place under the `data/` directory before usage. 
+ 
+## FAMA-FRENCH factors 
 
-- Script and logic used 
-- Additional explanation 1
-- Additional explanation 2 
+- **filename** `data.fama.csv`
+- **description:** 
+- **data columns:** 
+    - `col1`: description
+    - `col2`: description
+    - ... 
+
+
+
+
+
