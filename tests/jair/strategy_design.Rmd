@@ -91,7 +91,7 @@ head(fetch_sp500_sector_data("Information Technology"))
 
 Pack everything into one function to retrieve all the data 
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 # Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
 sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_tickers=TRUE)
 sector_list
@@ -113,6 +113,7 @@ sp500_stocks <- lapply(sector_list,
 # Show the available sectors 
 names(sp500_stocks)
 ```
+
 ```{r}
 # Show available stocks for Industrials 
 names(sp500_stocks$Industrials)
@@ -120,12 +121,11 @@ names(sp500_stocks$Industrials)
 
 ```{r}
 # access the xts of the stocks in industrials 
-head(sp500_stocks$Industrials$ADP)
+tail(sp500_stocks$Industrials$ADP)
 ```
 
 
-
-# 1. Backtesting Logic 
+# BACKTESTING LOGIC
 
 ### Adding a numeric index
 
@@ -138,22 +138,9 @@ tail(sample_xts, 10)
 ```
 
 ```{r}
-# month index are assigned automatically 
 sample_xts[, c( "month_index")]
 ```
 
-### splitting data by week 
-
-Initially, the idea was to split week-by-week, however, since we have to rebalance everymonth, this might lead to inconsistent results. Therefore, here I'm splitting the data week by week: 
-
-```{r}
-library(xts)
-
-# spli by months 
-sample_xts_by_month <- split.xts(sample_xts, f= "months")
-names(sample_xts_by_month)
-length(names(sample_xts_by_month)) # total number of months of data
-```
 ## BACKTESTING_PROCEDURE
 
 1. Assume we have $N_{years}$ years of weekly data, giving a total of $N_{months}$ many months. 2. We want to fix a window of $N_{W} = 12$ months at the time (i.e. a year of data). 
@@ -167,16 +154,8 @@ N^{runs} = \left\lfloor
 $$
 , where $s=1$ is the number of months to move at the time (because of monthly rebalance). 
 
-In our case, this gives 
 
-$$
-N^{runs} = \left\lfloor 
-    \dfrac{59 - 12}{1} 
-\right\rfloor
-+ 1 
-= 48 
-$$
-i.e., we can move 47 times when predicting one month at the time, starting with having all the data until month 12. 
+i.e., we can move $N^{runs}$ times when predicting one month at the time, starting with having all the data until month 12. 
 
 That is, $\tau = 1, \dots, 48$
 
@@ -203,7 +182,8 @@ returns <- rep(NA, N_runs)
 portfolio <- list(tickers = initial_tickers, 
                   weights = weights, 
                   capital = initial_capital, 
-                  returns = returns
+                  returns = returns, 
+                  data = NA
                   )
 portfolio
 ```
@@ -257,8 +237,11 @@ for(tau in seq(N_runs)){
   # Optimize portfolio weights using modified min_variance 
   print("")
   print("(3) OPTIMIZE_PORTFOLIO(portfolio)")
+  # simulate the optimization 
+  portfolio$weights <- runif(length(portfolio$weights)) / sum(runif(length(portfolio$weights)))
   print("weights: ") 
   print(paste(" ", portfolio$weights))
+  
   print("")
   print("(4) LONG PORTFOLIO()")
   
@@ -315,7 +298,11 @@ source(here("functions", "feature_engineering.R"))
 
 # test out for a sample run  
 tau = 3 # run number 3
-sample_xts_train_val <- f_extract_train_val_features(sample_xts, tau=tau) # extract features
+sample_xts_train_val <- f_extract_train_val_features(sample_xts, # stock xts
+                                                     tau=tau, # current run 
+                                                     n_months = N_window, # size of window 
+                                                     val_lag = 1 # validation month
+                                                     ) 
 
 # display some columns for the extracted data
 head(sample_xts_train_val$train[,c("direction_lead", "clv", "volat", "month_index")]) 
@@ -323,10 +310,44 @@ print("")
 head(sample_xts_train_val$val[,c("direction_lead", "clv", "volat", "month_index")])
 ```
 
+```{r}
+# show how the train and validation set look together
+rbind(sample_xts_train_val$train[,c("direction_lead", "clv", "volat", "month_index")], 
+      sample_xts_train_val$val[,c("direction_lead", "clv", "volat", "month_index")])
+```
 
-### SECTOR PROCEDURE 
+## EXTRACT_DYNAMIC_FEATURES 
+
+```{r, message=FALSE}
+# add GARCH features only 
+sample_xts_with_garch <- f_add_garch_forecast(sample_xts, volat_col="volat")
+
+# display 
+tail(sample_xts_with_garch, 3)
+```
+
+```{r, message=FALSE}
+# Example usage
+sample_xts_with_arima <- f_add_arima_forecast(sample_xts_with_garch, 
+                                              return_col="realized_returns")
+tail(sample_xts_with_arima)
+```
 
 ```{r}
+sample_xts_with_arima[, c("actual_returns", "vol_forecast")]
+```
+```{r}
+# Example usage
+sample_xts_full <- f_extract_dynamic_features(sample_xts_with_garch, 
+                                              return_col="realized_returns")
+tail(sample_xts_full)
+```
+
+
+## SECTOR PROCEDURE 
+
+
+```{r, warning=FALSE}
 SECTOR_PROCEDURE <- function(G, tau){ 
   ## 
   ## Params: 
@@ -348,14 +369,35 @@ SECTOR_PROCEDURE <- function(G, tau){
   names(sector_stocks_window) <- sector_tickers
   
   # extract static train-val for all stocks 
-  list_train_val_sector <- lapply(sector_data, f_extract_train_val_features, tau=tau)
+  list_train_val_sector <- lapply(sector_data, 
+                                  f_extract_train_val_features, 
+                                  tau=tau, # current run 
+                                  n_months = 12, # size of window 
+                                  val_lag = 2 # months to use in val set 
+                                  )
   
   # return top 3 best stocks according to modelling procedure
-  print("  MODELLING_PROCEDURE()")
-  top_sector_stocks <- sample(names(sp500_stocks[[G]]), 3 )
+  print("  MODELLING_PROCEDURE(list_train_val_sector)")
+  top_sector_stocks <- sample(names(sp500_stocks[[G]]), 3 ) 
+  
+  ########## Inside MODELLING_PROCEDURE #########################
+  
+  # Stack the train and val splitted data for all stocks in sector
+  sector_stocks <- lapply(list_train_val_sector, function(stock) {
+    # Concatenate 'train' and 'val' xts objects within each stock
+    concatenated_xts <- rbind(stock$train, stock$val)
+    return(concatenated_xts)
+  })
+  
+  # NOTE: MODELLLING_PROCEDURE should also compute dynamic features for concatenated data 
+  sector_stocks <- lapply(sector_stocks, f_extract_dynamic_features)
+  
+  # should return the train-val list for the chosen stocks 
+  chosen_stocks <- sector_stocks[names(sector_stocks) %in% top_sector_stocks]
+  
+  ########## Inside MODELLING_PROCEDURE #########################
 
-  return(list_train_val_sector) # not actual return value!
-  # return(top_sector_stocks)
+  return(chosen_stocks) # not actual return value!
 }
 
 # peform the sector procedure 
@@ -366,41 +408,90 @@ sector_stocks_window <- SECTOR_PROCEDURE(G, tau)
 
 ```{r}
 names(sector_stocks_window) # names are tickers, values are list of train-val xts
-names(sector_stocks_window$ADP) # names are train and val, value for each are xts
-head(sector_stocks_window$CAT$train, 3) # xts object subset
-print("") 
-tail(sector_stocks_window$CAT$val, 3)
+head(sector_stocks_window[[2]]) # names are train and val, value for each are xts
 ```
-## EXTRACT_DYNAMIC_FEATURES 
+
+## Aside: Format for Portfolio Optimization 
+
 
 ```{r}
-# add GARCH features only 
-sample_xts_with_garch <- f_add_garch_forecast(sample_xts, volat_col="volat")
+## This chunk of code simply obtains some portfolio stock tickers
+## in a way that will be similar to the final result 
 
-# display 
-tail(sample_xts_with_garch, 3)
+# repack the portfolio (repeated from before)
+portfolio <- list(tickers = initial_tickers, 
+                  weights = weights, 
+                  capital = initial_capital, 
+                  returns = returns, 
+                  data = NA
+                  )
+portfolio
+```
+
+The following simulates best tickers that would be obtained after modelling procedure for all sectors
+
+```{r, warning=FALSE}
+# Set up backtesting simulation parameters
+sample_xts <- sp500_stocks$Industrials$ADP
+sectors <- names(sp500_stocks) 
+N_sector_best_stocks <- 3 
+tau <- 3 
+
+# store ticker for current portfolio 
+cur_tickers <- rep(NA, num_tickers)
+
+# store actual data for each run 
+portf_stocks_data <- as.list(rep(NA, length(sectors)))
+names(portf_stocks_data) <- sectors
+
+# keep index counter for sectors yfu,uyfyu
+i_sector <- 1
+
+print("")
+print("(2) PORTFOLIO_LOOP:")
+# loop through all the sectors 
+for(G in sectors){
+  
+  # return top 3 best stocks (xts data) according to procedure 
+  top_sector_stocks <- SECTOR_PROCEDURE(G, tau)
+
+  # assign best stocks to portfolio (NEED TO UPDATE LOGIC!)
+  i_replace <- c(i_sector, i_sector+1, i_sector+2)
+  cur_tickers[i_replace] <- names(top_sector_stocks)
+  i_sector <- i_sector + 3
+  
+  # assign the data to the portfolio 
+  portf_stocks_data[[G]] <- top_sector_stocks
+}
+
+# Portfolio tickers get updated 
+portfolio$tickers <- cur_tickers
 ```
 
 ```{r}
-# Example usage
-sample_xts_with_arima <- f_add_arima_features(sample_xts_with_garch, 
-                                              return_col="realized_returns")
-tail(sample_xts_with_arima)
+# unlist data best stocks data format into a singles list
+portf_data <- f_unlist_portf_data(portf_stocks_data)
+
+# assign list to portfolio 
+portfolio$data <- portf_data
 ```
 
-### Adding the dynamic features to any stock xts subset
+
+### Data format for portfoli optimization 
+
+Note that at this point, the portfolio will have the tickers and the weights attributes. 
 
 ```{r}
-# add all the features to the sample data 
-sample_xts_full_feats <- f_extract_dynamic_features(sample_xts) 
-head(sample_xts_full_feats)
+# Checko out the resulting portfolio 
+portfolio$tickers
+portfolio$capital
+portfolio$returns
+print("")
+
+# inspect the names and data for one stock 
+names(portfolio$data)
+head(portfolio$data[[1]])
 ```
-
-
-
-
-
-
 
 
 

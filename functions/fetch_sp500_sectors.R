@@ -291,11 +291,11 @@ f_fetch_ind_base <- function(ticker, from, to){
   # Rename the various columns using the base_name and the technical indicators names
   base_name <- tolower(gsub("[[:punct:]]", "", ticker))
   col_names <- c("date", "direction_lead", 
-                 "realized_returns",
-                 paste0(base_name,"_adjclose_lag0"),
-                 paste0(base_name,"_adjclose_lag1"),
-                 paste0(base_name,"_adjclose_lag2"),
-                 paste0(base_name,"_adjclose_lag3"),
+                 "realized_returns",# stock_adjclose_lead = TARGET
+                 "actual_returns", # "adjclose_lag0" = 
+                 "adjclose_lag1", 
+                 "adjclose_lag2",
+                 "adjclose_lag3",
                  "atr", "adx", "aaron", "bb", "chaikin_vol", "clv", 
                  "emv", "macd", "mfi", "sar", "smi", "volat")
   names(df_ticker) <- col_names
