@@ -6,10 +6,53 @@
 # @author: Hair Parra
 ################################################################################
 
-###########################
-### 0. Initial Features ###
-###########################
+########################
+### 0. General Utils ###
+########################
 
+f_select_features <- function(fmla, data,target_var, method="backward", nvmax=15){ 
+  ## Wrapper for feature selecion given some formula and train data. 
+  ## 
+  ## Params: 
+  ##    - fmla (formula): lm-like R formula for the linear fitting. 
+  ##    - data (xts): should contain the train set from a stock in list_train_val_sector
+  ##                  , which corresponds to one economic sector.
+  ##    - target_var (str): columnname which contains the target variable in the data
+  ##    - method (str): actual method in regsubsets()
+  ##    - nvmax (int):max size of subsets to examine
+  
+  # require the package 
+  require("leaps")
+  
+  # Perform backward stepwise selection using 'regsubsets()' on the training data
+  regfit_bwd <- regsubsets(x = fmla, 
+                           data = data, 
+                           method = "exhaustive", 
+                           nvmax = nvmax # max size of subsets to examine
+  )
+  
+  # Generate a summary of the fitted model
+  reg_summary <- summary(regfit_bwd) 
+  
+  # Identify the index of the model with the minimum BIC value
+  id_best <- which.max(reg_summary$adjr2) 
+  
+  # Get the column names from the 'which' matrix in the summary object
+  featnames <- colnames(reg_summary$which) 
+  
+  # Filter the selected columns and remove intercept 
+  best_featnames <- featnames[reg_summary$which[id_best,]] 
+  best_featnames <- best_featnames[-1]
+  
+  # Construct the best formula for the linear model using the selected variables
+  fmla_best <- paste0(target_var, " ~", paste(best_featnames, collapse = " + "))
+  
+  # Pack into a list to return
+  return_feats <- list(featnames = best_featnames, 
+                       fmla = as.formula(fmla_best))
+  
+  return(return_feats)
+}
 
 ##########################
 ### 1. Static Features ###
@@ -56,8 +99,8 @@ f_extract_train_val_features <- function (stock_data, tau = NULL, n_months = 12,
   t_val <- t_end - val_lag
   
   # Subset the appropriate train and test sets for that stock 
-  train_sub = stock_data[(stock_data$month_index >= t_start) & (stock_data$month_index < t_val)] 
-  val_sub = stock_data[(stock_data$month_index >= t_val) & (stock_data$month_index <= t_end)] 
+  train_sub = stock_data[(stock_data$month_index >= t_start) & (stock_data$month_index <= t_val)] 
+  val_sub = stock_data[(stock_data$month_index > t_val) & (stock_data$month_index <= t_end)] 
   
   
   stock_train_val <- list(train = train_sub,
