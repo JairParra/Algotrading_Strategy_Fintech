@@ -14,6 +14,7 @@ f_select_features <- function(fmla,
                               data, 
                               target_var, 
                               volat_col, 
+                              garch_col = NULL, 
                               method="exhaustive", 
                               nvmax=15
                               ){ 
@@ -24,8 +25,8 @@ f_select_features <- function(fmla,
   ##    - data (xts): should contain the train set from a stock in list_train_val_sector
   ##                  , which corresponds to one economic sector.
   ##    - target_var (str): columnname which contains the target variable in the data
-  ##    - volat (str): columnname which contains the volatility column in the data. Always keep
-
+  ##    - volat_col (str): columnname which contains the volatility column in the data.
+  ##    - garch_col (str): colunname which contains the GARCH(1,1) feature column of the data.
   ##    - method (str): actual method in regsubsets()
   ##    - nvmax (int):max size of subsets to examine
 
@@ -56,6 +57,18 @@ f_select_features <- function(fmla,
   if (!(volat_col %in% best_featnames)) {
     # add "test" to the end of the list
     best_featnames <- c(best_featnames, volat_col)
+  }
+  else{ 
+    warning("volat_col must be present in columns")
+  }
+  
+  # Add the garch_col if not a feature 
+  if (!(garch_col %in% best_featnames) & !is.null(garch_col)) {
+    # add "test" to the end of the list
+    best_featnames <- c(best_featnames, garch_col)
+  }
+  else{
+    warning("garch_col must be present in columns")
   }
   
   # Construct the best formula for the linear model using the selected variables

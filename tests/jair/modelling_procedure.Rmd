@@ -147,13 +147,14 @@ portfolio
 
 # MODELLING_PROCEDURE 
 
-Recall that the $\text{SECTOR_PROCEDURE}(G,\tau)$ function takes the argument $G$, which is the **sector name**, and **tau**, which is the current run in the backtesting. 
+Recall that the **SECTOR_PROCEDURE**$(G,\tau)$ function takes the argument $G$, which is the **sector name**, and **tau**, which is the current run in the backtesting. 
 
 This procedure happens in a loop, for every sector $G$. Here, we fix one sector only, and a specific $\tau$. The code does the following: 
 
 1. Retrieves the actual sector stock data (list of key-value pairs, keys are stock tickers, values are xts full data for that stock.)
 2. Creates a variable to store the subset of data that goes into the current window. 
-3. The `f_extract_train_val_features()` function extracts the appropriate window of data corresponding to the $\tau$, with the appropriate window size, for all sectors. `val_lag` specifics the number of months to be assigned to the validation set. 
+3. The `f_extract_window()` function extracts the appropriate window of data corresponding to the $\tau$, with the appropriate window size, for all sectors.
+4. Extracts the dynamic features (ARIMA and GARCH) for that each stock in the sector. 
 
 ```{r}
 # parameters 
@@ -173,28 +174,35 @@ sector_stocks_window <- rep(NA, length(sector_tickers))
 names(sector_stocks_window) <- sector_tickers
 
 # extract static train-val for all stocks 
-list_train_val_sector <- lapply(sector_data, 
-                                f_extract_window, 
-                                tau=tau, # current run 
-                                n_months = N_window# size of window 
-                                )
+list_xts_sector <- lapply(sector_data, 
+                          f_extract_window, 
+                          tau=tau, # current run 
+                          n_months = N_window# size of window 
+                          )
+
+# compute dynamic features for all stocks
+list_xts_sector <- lapply(list_xts_sector, 
+                          f_extract_dynamic_features, 
+                          return_col = "realized_returns", 
+                           volat_col = "volat"
+                          )
 
 ####### Inside SECTOR_PROCEDURE ########
 
 # keys are stock tickers for that sector 
-names(list_train_val_sector)
+names(list_xts_sector)
 
 # each stock has the xts subset (for window)
-head(list_train_val_sector[[1]])
+head(list_xts_sector[[1]])
 ```
-The result is the `list_train_val_sector` oject, which is a list of lists. 
+The result is the `list_train_val_sector` object, which is a list of lists. 
 - The first level are the stock tickers
 - The second level are train and val xts for each stock. 
 
 
 ```{r}
 # Check num of rows (weeks) for window  
-nrow(list_train_val_sector[[1]])
+nrow(list_xts_sector[[1]])
 ```
 
 ### Feature Selection 
@@ -205,8 +213,8 @@ Notes:
 - `f_select_features()` is found under `functions/feature_engineering.R`
 
 ```{r}
-# Extract a sample stock in the list_train_val_sector
-sample_sector_stock <- list_train_val_sector[[1]]
+# Extract a sample stock in the list_xts_sector
+sample_sector_stock <- list_xts_sector[[1]]
 
 # Define the formula for regression
 fmla <- realized_returns ~ . -realized_returns -month_index
@@ -217,7 +225,8 @@ best_feat_list <- f_select_features(
                     data = sample_sector_stock, # for one stock of current sector  
                     target_var = "realized_returns", # y 
                     volat_col = "volat", # we always want to keep the volatility col
-                    nvmax = 50, # examine all possible subsets
+                    garch_col = "vol_forecast", # GARCH column
+                    nvmax = 15, # examine all possible subsets
                     method="exhaustive") #  we always want to use forward selection
 best_feat_list
 ```
@@ -225,7 +234,9 @@ The result of this object is a list `best_feat_list` in this case, containing tw
 - `featnames`: a list of features selected. 
 - `fmla`: An R formula (for regression, etc) 
 
-**NOTE:** This is just for illustration and to visualize the data. The actual feature selection is performed in a loop for every stock as illustrated in the next section. 
+**NOTE:** 
+- This is just for illustration and to visualize the data. The actual feature selection is performed in a loop for every stock as illustrated in the next section. 
+- There will always be linear dependencies because of the ARIMA features. This is normal. 
 
 
 ### Regularized MLR (Elasticnet) 
@@ -299,12 +310,7 @@ for(ticker in sector_tickers){
   ### NOTE: Need to refactor 
   
   # fetch data for that ticker 
-  full_train <- list_train_val_sector[[ticker]]
-
-  # Compute dynamic features 
-  full_train <- f_extract_dynamic_features(full_train, 
-                                           return_col = "realized_returns", 
-                                           volat_col = "volat")
+  full_train <- list_xts_sector[[ticker]]
   
   # Re-extract train and val with full features 
   full_train <- f_extract_train_val_no_window(full_train, 
@@ -323,11 +329,12 @@ for(ticker in sector_tickers){
   ### Step 1: Feature Selection 
 
   # Perform feature selection for that stock
-  best_feat_list <-f_select_features(
+  best_feat_list <- f_select_features(
                       fmla = fmla, # formula for regression
                       data = ticker_data_train, # train data for one stock of current sector
                       target_var = "realized_returns", # y
                       volat_col = "volat", # always keep the actual volatility
+                      garch_col = "vol_forecast", 
                       nvmax = 20, # total number of max subsets
                       method="exhaustive")
 
@@ -377,8 +384,7 @@ for(ticker in sector_tickers){
   sector_tracker[[ticker]]$rmse = enet_rmse
   sector_tracker[[ticker]]$sharpe = stock_sharpe
   sector_tracker[[ticker]]$msr = stock_msr
-
-  # sector_tracker[[ticker]]$data = rbind.xts(ticker_data_train, ticker_data_val) # uncomment for final!
+  # sector_tracker[[ticker]]$data = rbind.xts(ticker_data_train, ticker_data_val) # This should be included at the end! 
 
 
   # show values
@@ -406,7 +412,6 @@ names(sector_tracker[[1]])
 ```{r}
 sector_tracker
 ```
-
 
 
 ```{r}
