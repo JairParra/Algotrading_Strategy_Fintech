@@ -487,8 +487,8 @@ length(seq(5, 16)) # 12 months
 Only on the `train_set`. 
 
 ```{r}
-# Load the package 
-source(here("functions", "feature_engineering.R"))
+# Extract a sample stock in the list_train_val_sector
+sample_sector_stock <- list_train_val_sector[[1]]
 
 # Define the formula for regression
 fmla <- realized_returns ~ . -realized_returns -month_index
@@ -496,9 +496,10 @@ fmla <- realized_returns ~ . -realized_returns -month_index
 # try obtaining best features for a sample train set for a stock in the sample sector 
 best_feat_list <- f_select_features(
                   fmla = fmla, # formula for regression 
-                  data = list_train_val_sector[[1]]$train, # train data for one stock of current sector  
+                  data = sample_sector_stock$train, # train data for one stock of current sector  
                   target_var = "realized_returns", # y 
-                  nvmax = 50, 
+                  volat_col = "volat", 
+                  nvmax = 50, # examine all possible subsets
                   method="forward")
 best_feat_list
 ```
@@ -517,9 +518,7 @@ $$
   + (1-\alpha)||\beta||_{2}^{2}
 \right]
 $$
-```{r}
-### Perform feature selection on the train set for every stock 
-
+```{r, message=FALSE}
 # load required libraries 
 library("caret")
 library("Metrics")
@@ -539,6 +538,7 @@ names(sector_tracker) <- sector_tickers
 sector_tracker <- lapply(sector_tracker, function(x) list(
   forecasted_ret = NA,
   sharpe = NA,
+  msr = NA, # modified sharpe ratio
   rmse = NA,
   data = NA
 ))

@@ -64,6 +64,9 @@ f_get_sp500_sectors <- function(){
   return(sp500_sectors)
 }
 
+# load into env 
+sp500_sectors <- f_get_sp500_sectors()
+
 
 # function to fetch the tickers, weights and no.shares held for an economic sector 
 # in the SP500. 

@@ -10,7 +10,13 @@
 ### 0. General Utils ###
 ########################
 
-f_select_features <- function(fmla, data,target_var, method="backward", nvmax=15){ 
+f_select_features <- function(fmla, 
+                              data, 
+                              target_var, 
+                              volat_col, 
+                              method="exhaustive", 
+                              nvmax=15
+                              ){ 
   ## Wrapper for feature selecion given some formula and train data. 
   ## 
   ## Params: 
@@ -18,16 +24,18 @@ f_select_features <- function(fmla, data,target_var, method="backward", nvmax=15
   ##    - data (xts): should contain the train set from a stock in list_train_val_sector
   ##                  , which corresponds to one economic sector.
   ##    - target_var (str): columnname which contains the target variable in the data
+  ##    - volat (str): columnname which contains the volatility column in the data. Always keep
+
   ##    - method (str): actual method in regsubsets()
   ##    - nvmax (int):max size of subsets to examine
-  
+
   # require the package 
   require("leaps")
   
   # Perform backward stepwise selection using 'regsubsets()' on the training data
   regfit_bwd <- regsubsets(x = fmla, 
                            data = data, 
-                           method = "exhaustive", 
+                           method = method, 
                            nvmax = nvmax # max size of subsets to examine
   )
   
@@ -43,6 +51,12 @@ f_select_features <- function(fmla, data,target_var, method="backward", nvmax=15
   # Filter the selected columns and remove intercept 
   best_featnames <- featnames[reg_summary$which[id_best,]] 
   best_featnames <- best_featnames[-1]
+  
+  # Add the volat_col if not a feature 
+  if (!(volat_col %in% best_featnames)) {
+    # add "test" to the end of the list
+    best_featnames <- c(best_featnames, volat_col)
+  }
   
   # Construct the best formula for the linear model using the selected variables
   fmla_best <- paste0(target_var, " ~", paste(best_featnames, collapse = " + "))
@@ -94,7 +108,7 @@ f_extract_train_val_features <- function (stock_data, tau = NULL, n_months = 12,
   ##  - val_lag (int): Number of months to consider for the validation set 
   
   # Calculate the beginning and end of the current window 
-  t_start <- tau;
+  t_start <- tau
   t_end <- tau + n_months - 1 
   t_val <- t_end - val_lag
   
@@ -106,6 +120,49 @@ f_extract_train_val_features <- function (stock_data, tau = NULL, n_months = 12,
   stock_train_val <- list(train = train_sub,
                           val = val_sub
   )
+  
+  return(stock_train_val)
+}  
+
+
+# function that extracts data for the window only, but does not split the data into train-val 
+f_extract_window <- function (stock_data, tau = NULL, n_months = 12){
+  ## 
+  ## Params: 
+  ##  - stock_data (xts): An xts object contianing the features and target for the stock 
+  ##  - tau (int): the current run number used to split the data 
+  ##  - n_months (int): the number of months to consider for the window 
+  ##  - val_lag (int): Number of months to consider for the validation set 
+  
+  # Calculate the beginning and end of the current window 
+  t_start <- tau
+  t_end <- tau + n_months - 1 
+
+  # Subset the appropriate train and test sets for that stock 
+  data_sub = stock_data[(stock_data$month_index >= t_start) & (stock_data$month_index <= t_end)] 
+  
+  return(data_sub)
+}  
+
+# function that extracts the train and val only  
+f_extract_train_val_no_window <- function (stock_data, val_lag = 2){
+  ## 
+  ## Params: 
+  ##  - stock_data (xts): An xts object contianing the features and target for the stock 
+  ##  - val_lag (int): Number of months to consider for the validation set 
+  
+  # Calculate the beginning and end of the current window 
+  t_start <- as.vector(stock_data[, c("month_index")])[1]
+  t_end <- as.vector(stock_data[, c("month_index")])[nrow(stock_data)]
+  t_val <- t_end - val_lag
+  
+  # Subset the appropriate train and test sets for that stock 
+  train_sub = stock_data[(stock_data$month_index >= t_start) & (stock_data$month_index <= t_val)] 
+  val_sub = stock_data[(stock_data$month_index > t_val) & (stock_data$month_index <= t_end)] 
+  
+  # pacl into a list to return 
+  stock_train_val <- list(train = train_sub,
+                          val = val_sub)
   
   return(stock_train_val)
 }  
@@ -167,6 +224,8 @@ f_add_arima_forecast <- function(stock_data, return_col) {
   
   # Validate input
   if (!is.xts(stock_data) || !(return_col %in% colnames(stock_data))) {
+    print("cols(stock_data):")
+    print(cols(stock_data))
     stop("Invalid input: stock_data must be an xts object and return_col must be a column in stock_data")
   }
   
