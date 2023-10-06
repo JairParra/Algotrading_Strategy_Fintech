@@ -90,6 +90,9 @@ sp500_stocks <- lapply(sector_list,
                        end_date="2022-12-01") 
 ```
 
+
+
+
 The result of this function is a list of lists, with elements as below. 
 
 ```{r}
@@ -158,8 +161,8 @@ This procedure happens in a loop, for every sector $G$. Here, we fix one sector 
 
 ```{r, message=FALSE}
 # parameters 
-G <- names(sp500_stocks)[1] # sample sector 
-tau <- 10 # suppose we are in run 5 of the backtest 
+G <- names(sp500_stocks)[3] # sample sector 
+tau <- 20 # suppose we are in run 5 of the backtest 
 
 ####### Inside SECTOR_PROCEDURE ######## 
 
@@ -175,7 +178,7 @@ names(sector_stocks_window) <- sector_tickers
 
 # extract static train-val for all stocks 
 list_xts_sector <- lapply(sector_data, 
-                          f_extract_window, 
+                          f_extract_window, # choose based on tau = based on the run 
                           tau=tau, # current run 
                           n_months = N_window# size of window 
                           )
@@ -193,7 +196,7 @@ list_xts_sector <- lapply(list_xts_sector,
 names(list_xts_sector)
 
 # each stock has the xts subset (for window)
-head(list_xts_sector[[1]])
+tail(list_xts_sector[[1]])
 ```
 The result is the `list_train_val_sector` object, which is a list of lists. 
 - The first level are the stock tickers
@@ -270,7 +273,7 @@ fmla <- realized_returns ~ . -realized_returns -month_index
 
 # Create a grid for elastic net regression hyperparameters
 grid_enet <- expand.grid(alpha = seq(from = 0, to = 1, by = 0.1),  # Elastic net mixing parameter
-                         lambda = seq(from = 0, to = 0.05, by = 0.05))  # Regularization strength
+                         lambda = seq(from = 0, to = 0.05, by = 0.01))  # Regularization strength
 
 # Initialize variable to save forecasted returns, MSEs and Sharpe Ratios 
 sector_tracker <- as.list(rep(NA, length(sector_tickers)))
@@ -308,7 +311,6 @@ for(ticker in sector_tickers){
   ### Step 0: Data Preparation 
   
   ###########################################################################
-  ### NOTE: Need to refactor 
   
   # fetch data for that ticker 
   full_train <- list_xts_sector[[ticker]]
@@ -318,8 +320,8 @@ for(ticker in sector_tickers){
                                               val_lag = 1) # number of months in val 
   
   # Reassign to train and val 
-  ticker_data_train <- full_train$train
-  ticker_data_val <- full_train$val
+  ticker_data_train <- full_train$train # the rest 
+  ticker_data_val <- full_train$val # the last month only 
   
   # remove nas 
   ticker_data_train <- na.omit(ticker_data_train) # data cannot contain nas 
@@ -389,7 +391,7 @@ for(ticker in sector_tickers){
   # Calculate the ES and set risk-free 
   VaR <- quantile(hist_returns, 0.05) 
   ES <- mean(hist_returns[hist_returns < VaR])
-  Rf <- 0
+  Rf <- 0 # risk free rate 
                        
   # Calculate the Sharpe and MSR
   stock_sharpe <- ((mean_rets- Rf)/ std_rets ) * sqrt(scaling_factor) # annualized
@@ -405,6 +407,7 @@ for(ticker in sector_tickers){
 
   # show values
   print("*****************************************")
+  print(paste("forecasted_ret: ", pred_enet_best))
   print(paste("rmse: ", enet_rmse))
   print(paste("sharpe: ", stock_sharpe))
   print(paste("msr: ", stock_msr))
@@ -452,7 +455,7 @@ f_select_top_stocks <- function(sector_tracker, n=3){
   top_fore_rets <- names(sort(sapply(sector_tracker, function(x) x$forecasted_ret), decreasing=TRUE))[1:n]
   
   # Concat in one list 
-  top_tickers  <-c(top_sharpe, top_fore_rets) 
+  top_tickers  <-c(top_sharpe, top_fore_rets) # fix so that becomes a set
   
   # Create a new named list with tickers and their corresponding data
   best_stocks_data <- lapply(top_tickers, function(x) sector_tracker[[x]])
@@ -464,7 +467,10 @@ f_select_top_stocks <- function(sector_tracker, n=3){
 
 ```{r}
 # Cbtain data for the top n*2 stocks (best forecasted rets and best sharpe together)
-f_select_top_stocks(sector_tracker = sector_tracker, n = 2)
+best_stocks_data <- f_select_top_stocks(sector_tracker = sector_tracker, n = 2)
+names(best_stocks_data) 
+names(best_stocks_data[[1]])
+best_stocks_data
 ```
 
 
