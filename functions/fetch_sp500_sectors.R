@@ -241,11 +241,11 @@ f_fetch_ind_base <- function(ticker, from, to){
   
   # Download the stock data for ticker from Yahoo (default) 
   # between the dates from and to.
-  stock <- getSymbols(ticker,
-                      auto.assign = FALSE,
-                      from = from,
-                      to = to)
-  
+  stock <- quantmod::getSymbols(ticker,
+                                auto.assign = FALSE,
+                                from = from,
+                                to = to)
+            
   # Choose Wednesday adjusted close price and compute their returns 
   # using PerformanceAnalytics library
   # indexwday() == 3 corresponds to wednesday
@@ -253,6 +253,9 @@ f_fetch_ind_base <- function(ticker, from, to){
   stock_wed_rets <-
     PerformanceAnalytics::Return.calculate(prices = stock_wed,
                                            method = "log")[, 6]
+  discrete_returns <-
+    PerformanceAnalytics::Return.calculate(prices = stock_wed,
+                                           method = "discrete")[, 6]
   
   # Create lagged returns and convert to xts object
   
@@ -262,7 +265,7 @@ f_fetch_ind_base <- function(ticker, from, to){
   
   # Create 1 week forward (realized) returns by shifting the returns by a period
   realized_returns <- as.xts(data.table::shift(stock_wed_rets, type = "lead")) # stock_adjclose_lead
-  
+
   # Name the column using the base_name variable
   colnames(realized_returns)[1] <- paste0(base_name,"_adjclose_lead")
   
@@ -274,9 +277,11 @@ f_fetch_ind_base <- function(ticker, from, to){
   # Create data.frame with output variable and predictors
   df_ticker <- data.frame(
     date = index(stock_wed_rets),
+    adjusted_close = stock_wed[, 6], # stock price
     direction = factor(direction, levels = c(1, -1)),
-    stock_close_lead = realized_returns,
-    coredata(stats::lag(stock_wed_rets, k = 0:3)),
+    discrete_retruns = discrete_returns, # discrete returns, unlagged
+    realized_returns = realized_returns, # log returns, future lag 
+    coredata(stats::lag(stock_wed_rets, k = 0:3)), # lagged returns, log 
     atr = coredata(f_ATR(stock_wed)),
     adx = coredata(f_ADX(stock_wed)),
     aroon = coredata(f_Aroon(stock_wed)),
@@ -293,9 +298,12 @@ f_fetch_ind_base <- function(ticker, from, to){
   
   # Rename the various columns using the base_name and the technical indicators names
   base_name <- tolower(gsub("[[:punct:]]", "", ticker))
-  col_names <- c("date", "direction_lead", 
+  col_names <- c("date", 
+                 "adjusted_close", # raw adjusted close price
+                 "direction_lead", 
+                 "discrete_returns",
                  "realized_returns",# stock_adjclose_lead = TARGET
-                 "actual_returns", # "adjclose_lag0" = 
+                 "adjclose_lag0", # "adjclose_lag0" = 
                  "adjclose_lag1", 
                  "adjclose_lag2",
                  "adjclose_lag3",
