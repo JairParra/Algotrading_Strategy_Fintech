@@ -17,6 +17,7 @@ output:
       extra_dependencies: ["array", "amsmath","booktabs"]
 ---
 
+```{=tex}
 \newtheorem{assumption}{Assumption}[assumption]
 \newtheorem{theorem}{Theorem}
 \theoremstyle{definition}
@@ -26,7 +27,7 @@ output:
 \newtheorem{remark*}{Remark}
 \newtheorem{aside*}{Aside}
 \newtheorem{exercise*}{Exercise}
-
+```
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 knitr::opts_chunk$set(fig.width=9, fig.height=6) 
@@ -37,7 +38,7 @@ my_plot_hook <- function(x, options)
 knitr::knit_hooks$set(plot = my_plot_hook)
 ```
 
-## Libraries 
+## Libraries
 
 ```{r, echo=FALSE, message=FALSE}
 # Load the required packages
@@ -50,10 +51,9 @@ library(tidyverse)
 library(tidyquant)
 ```
 
-
 # 0. Scraping the SP500
 
-In order to test the logic within the strategy, I have fetched functions that retrieve a number of sample stocks by sector from the SP500. 
+In order to test the logic within the strategy, I have fetched functions that retrieve a number of sample stocks by sector from the SP500.
 
 ```{r}
 # to obtain relative paths
@@ -63,11 +63,9 @@ library(here)
 source(here("functions", "fetch_sp500_sectors.R"))
 ```
 
-
 ### 0.0.1 SP500 Economic Sectors
 
-The following function fetches and extract the economic sectors from the SP500, taken from [Wikipedia](https://en.wikipedia.org/wiki/List_of_S%26P_500_companies). 
-
+The following function fetches and extract the economic sectors from the SP500, taken from [Wikipedia](https://en.wikipedia.org/wiki/List_of_S%26P_500_companies).
 
 ```{r, message=FALSE}
 # fetch the sectors as a dataframe 
@@ -75,9 +73,7 @@ sp500_sectors <- f_get_sp500_sectors()
 head(sp500_sectors)
 ```
 
-
 ### 0.0.2 SP500 Sector Weight
-
 
 ```{r}
 # wrap into a single argument funciton 
@@ -87,19 +83,19 @@ fetch_sp500_sector_data <- function(x){f_fetch_sector_data(x, sp500, sp500_secto
 head(fetch_sp500_sector_data("Information Technology"))
 ```
 
-### 0.0.3 Retrieving top sectors and stocks 
+### 0.0.3 Retrieving top sectors and stocks
 
-Pack everything into one function to retrieve all the data 
+Pack everything into one function to retrieve all the data
 
 ```{r, message=FALSE, warning=FALSE}
 # Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
 sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_tickers=TRUE)
 sector_list
 ```
+
 This logic is implemented under **functions/fetch_sp500_sectors.R**
 
-
-### 0.0.4 Retrieving top sectors and stocks 
+### 0.0.4 Retrieving top sectors and stocks
 
 ```{r, message=FALSE}
 # function to fetch all the information for one ticker into a nice xts dataframe 
@@ -124,12 +120,15 @@ names(sp500_stocks$Industrials)
 tail(sp500_stocks$Industrials$ADP)
 ```
 
-
 # BACKTESTING LOGIC
 
 ### Adding a numeric index
 
+<<<<<<< Updated upstream
 The data-fetching logic includes addition of a numerical index indicating to which month in the simulation the observations belong. 
+=======
+First, we need to create a corresponding index for each week:
+>>>>>>> Stashed changes
 
 ```{r}
 # count number of weeks in data from one of the dataframes 
@@ -143,20 +142,24 @@ sample_xts[, c( "month_index")]
 
 ## BACKTESTING_PROCEDURE
 
-1. Assume we have $N_{years}$ years of weekly data, giving a total of $N_{months}$ many months. 2. We want to fix a window of $N_{W} = 12$ months at the time (i.e. a year of data). 
-3. The total number of runs is given by 
+1.  Assume we have $N_{years}$ years of weekly data, giving a total of $N_{months}$ many months. 2. We want to fix a window of $N_{W} = 12$ months at the time (i.e. a year of data).
+2.  The total number of runs is given by
 
 $$
 N^{runs} = \left\lfloor 
     \dfrac{N_{months} - N_W}{s} 
 \right\rfloor
+<<<<<<< Updated upstream
 + 1
 $$
 
 , where $s=1$ is the number of months to move at the time (because of monthly rebalance). 
+=======
++ 1 
+$$ , where $s=1$ is the number of months to move at the time (because of monthly rebalance).
+>>>>>>> Stashed changes
 
-
-i.e., we can move $N^{runs}$ times when predicting one month at the time, starting with having all the data until month 12. 
+i.e., we can move $N^{runs}$ times when predicting one month at the time, starting with having all the data until month 12.
 
 That is, $\tau = 1, \dots, 48$
 
@@ -267,11 +270,16 @@ for(tau in seq(N_runs)){
 
 ## SECTOR_PROCEDURE
 
+<<<<<<< Updated upstream
 ### $\tau$ and window logic 
 
 
 1. Sector $G$ contains tickers $\{S_1,S_1,\dots,  S_{|G|}\}$, where $|G|$= number of stocks per sector (before selection). 
 2. For each ticker, want to calculate **current window:**
+=======
+1.  Sector $G$ contains tickers $\{S_1,S_1,\dots, S_{|G|}\}$, where $|G|$= number of stocks per sector (before selection).
+2.  For each ticker, want to calculate **current window:**
+>>>>>>> Stashed changes
 
 $$
 \left[
@@ -279,7 +287,7 @@ $$
   \;,\;
   t_{12} = \text{week } W_{s\times\tau + 11}
 \right]
-$$ 
+$$
 
 e.g. with $s=1$ (slide one month at the time)
 
@@ -294,20 +302,20 @@ $$
 \end{cases}
 $$
 
+### EXTRACT_STATIC_FEATURES()
 
-
-### EXTRACT_STATIC_FEATURES() 
-
-We had a set of features for some stock: 
-
+We had a set of features for some stock:
 
 ```{r}
 #get a sample stock xts data 
 sample_xts <- sp500_stocks$Industrials$ADP
 head(sample_xts, 5)
-```
 
+<<<<<<< Updated upstream
 The follwoing function extracts the specific window 
+=======
+```
+>>>>>>> Stashed changes
 
 ```{r}
 # source the feature engineering file 
@@ -325,9 +333,7 @@ sample_xts_window <- f_extract_window(sample_xts, # stock xts
 head(sample_xts_window[,c("direction_lead", "clv", "volat", "month_index")], 10) 
 ```
 
-
-
-## EXTRACT_DYNAMIC_FEATURES 
+## EXTRACT_DYNAMIC_FEATURES
 
 Three functions: 
 - `f_add_garch_forecast()`: Computes the GARCH 
@@ -360,8 +366,12 @@ sample_xts_full <- f_extract_dynamic_features(sample_xts_with_garch,
 tail(sample_xts_full)
 ```
 
+<<<<<<< Updated upstream
 ## SECTOR PROCEDURE 
 
+=======
+## SECTOR PROCEDURE
+>>>>>>> Stashed changes
 
 ```{r, warning=FALSE}
 SECTOR_PROCEDURE <- function(G, tau){ 
@@ -390,22 +400,37 @@ SECTOR_PROCEDURE <- function(G, tau){
   sector_stocks_window <- rep(NA, length(sector_tickers)) 
   names(sector_stocks_window) <- sector_tickers
   
+<<<<<<< Updated upstream
   # extract current window of data for all stocks 
   list_xts_sector <- lapply(sector_data, 
                                   f_extract_window, 
+=======
+  # extract static train-val for all stocks 
+   train_val<- lapply(sector_data, 
+                                  f_extract_train_val_features, 
+>>>>>>> Stashed changes
                                   tau=tau, # current run 
                                   n_months = N_window# size of window 
                                   )
   
   # return top 3 best stocks according to modelling procedure
-  print("  MODELLING_PROCEDURE(list_train_val_sector)")
+  print("  MODELLING_PROCEDURE()")
   top_sector_stocks <- sample(names(sp500_stocks[[G]]), num_top_pick) 
   
   ########## Inside MODELLING_PROCEDURE #########################
   ### NOTE: The MODELLING_PROCEDURE internally will use the train and 
   
+<<<<<<< Updated upstream
   # NOTE: MODELLLING_PROCEDURE should also compute dynamic features
   sector_stocks <- lapply(list_xts_sector, f_extract_dynamic_features)
+=======
+  # Stack the train and val splitted data for all stocks in sector
+  sector_stocks <- lapply(, function(stock) {
+    # Concatenate 'train' and 'val' xts objects within each stock
+    concatenated_xts <- rbind(stock$train, stock$val)
+    return(concatenated_xts)
+  })
+>>>>>>> Stashed changes
   
   # should return the list for the chosen stocks 
   chosen_stocks <- sector_stocks[names(sector_stocks) %in% top_sector_stocks]
@@ -426,8 +451,12 @@ names(sector_stocks_window) # names are tickers, values are list of xts
 head(sector_stocks_window[[2]]) # show ticker xts
 ```
 
+<<<<<<< Updated upstream
 
 # MODELLING_PROCEDURE 
+=======
+# MODELLING_PROCEDURE
+>>>>>>> Stashed changes
 
 Recall that the **SECTOR_PROCEDURE**$(G,\tau)$ function takes the argument $G$, which is the **sector name**, and **tau**, which is the current run in the backtesting. 
 
@@ -456,6 +485,7 @@ sector_stocks_window <- rep(NA, length(sector_tickers))
 names(sector_stocks_window) <- sector_tickers
 
 # extract static train-val for all stocks 
+<<<<<<< Updated upstream
 list_xts_sector <- lapply(sector_data, 
                           f_extract_window, 
                           tau=tau, # current run 
@@ -468,32 +498,70 @@ list_xts_sector <- lapply(list_xts_sector,
                           return_col = "realized_returns", 
                            volat_col = "volat"
                           )
+=======
+ <- lapply(sector_data, 
+                                f_extract_train_val_features, 
+                                tau=tau, # current run 
+                                n_months = N_window, # size of window 
+                                val_lag = 1 # months to use in val set 
+                                )
+>>>>>>> Stashed changes
 
 ####### Inside SECTOR_PROCEDURE ########
 
 
 # keys are stock tickers for that sector 
+<<<<<<< Updated upstream
 names(list_xts_sector)
 
 # each stock has the xts subset (for window)
 head(list_xts_sector[[1]])
+=======
+names()
+
+# each stock has train and test 
+names([[1]])
+```
+
+```{r}
+# Check some of train and val data for one stock 
+head([[1]]$train, 3) 
+print("")
+tail([[1]]$val, 3)
+print("") 
+nrow([[1]]$train) 
+nrow([[1]]$val)
+>>>>>>> Stashed changes
 ```
 The result is the `list_train_val_sector` oject, which is a list of lists. 
 - The first level are the stock tickers
 - The second level are train and val xts for each stock. 
 
+<<<<<<< Updated upstream
 
 ```{r}
 # Check num of rows (weeks) for window  
 nrow(list_xts_sector[[1]])
+=======
+We have 46 observations (weeks) for train, and 4 (weeks) for val.
+
+```{r}
+print(head([[1]]$train$month_index, 1)) # beginning month of window 
+print(tail([[1]]$val$month_index, 1)) # end month of window
+length(seq(5, 16)) # 12 months
+>>>>>>> Stashed changes
 ```
 
-### Feature Selection 
+### Feature Selection
 
+<<<<<<< Updated upstream
 Notes: 
 - This will use **forward selection** to extract the features from a sample stock for the current sector. 
 - The `target_var` argument specifies the target variable, in this case is called "realized_returns". 
 - `f_select_features()` is found under `functions/feature_engineering.R`
+=======
+Only on the `train_set`.
+>>>>>>> Stashed changes
 
 ```{r}
 # Extract a sample stock in the list_xts_sector
@@ -504,6 +572,7 @@ fmla <- realized_returns ~ . -realized_returns -month_index
 
 # try obtaining best features for a sample train set for a stock in the sample sector 
 best_feat_list <- f_select_features(
+<<<<<<< Updated upstream
                     fmla = fmla, # formula for regression 
                     data = sample_sector_stock, # for one stock of current sector  
                     target_var = "realized_returns", # y 
@@ -511,11 +580,17 @@ best_feat_list <- f_select_features(
                     garch_col = "forecasted_volatility", # gach col
                     nvmax = 15, # examine all possible subsets
                     method="exhaustive") #  we always want to use forward selection
+=======
+                  fmla = fmla, # formula for regression 
+                  data = [[1]]$train, # train data for one stock of current sector  
+                  target_var = "realized_returns", # y 
+                  nvmax = 50, 
+                  method="forward")
+>>>>>>> Stashed changes
 best_feat_list
 ```
 
-
-### Regularized MLR (Elasticnet) 
+### Regularized MLR (Elasticnet)
 
 $$
 \mathcal{L}(\beta) 
@@ -528,6 +603,12 @@ $$
   + (1-\alpha)||\beta||_{2}^{2}
 \right]
 $$
+<<<<<<< Updated upstream
+=======
+
+```{r}
+### Perform feature selection on the train set for every stock 
+>>>>>>> Stashed changes
 
 
 ```{r, message=FALSE}
@@ -562,6 +643,7 @@ names(sector_tracker[[1]]) # to store the values as the loop happens
 ```
 ## Fitting all the models 
 
+<<<<<<< Updated upstream
 Next, we loop through every stock doing the following: 
 1. Extracting the train and validation sets, and filter NAs
 2. Perform feature selection for every stock 
@@ -570,6 +652,8 @@ Next, we loop through every stock doing the following:
 5. Compute the Sharpe Ratio and Modified Sharpe 
 6. Save everything
 
+=======
+>>>>>>> Stashed changes
 ```{r, message=FALSE, warning=FALSE}
 # Loop for every stock ticker in sector G 
 for(ticker in sector_tickers){
@@ -581,6 +665,7 @@ for(ticker in sector_tickers){
   ### NOTE: Need to refactor 
   
   # fetch data for that ticker 
+<<<<<<< Updated upstream
   full_train <- list_xts_sector[[ticker]]
   
   # Re-extract train and val with full features 
@@ -590,6 +675,10 @@ for(ticker in sector_tickers){
   # Reassign to train and val 
   ticker_data_train <- full_train$train
   ticker_data_val <- full_train$val
+=======
+  ticker_data_train <- [[ticker]]$train 
+  ticker_data_val <- [[ticker]]$val
+>>>>>>> Stashed changes
   
   # remove nas 
   ticker_data_train <- na.omit(ticker_data_train) # data cannot contain nas 
@@ -670,9 +759,7 @@ for(ticker in sector_tickers){
 }
 ```
 
-
-## Aside: Format for Portfolio Optimization 
-
+## Aside: Format for Portfolio Optimization
 
 ```{r}
 ## This chunk of code simply obtains some portfolio stock tickers
@@ -736,10 +823,9 @@ portf_data <- f_unlist_portf_data(portf_stocks_data)
 portfolio$data <- portf_data
 ```
 
+### Data format for portfoli optimization
 
-### Data format for portfoli optimization 
-
-Note that at this point, the portfolio will have the tickers and the weights attributes. 
+Note that at this point, the portfolio will have the tickers and the weights attributes.
 
 ```{r}
 # Checko out the resulting portfolio 
@@ -754,16 +840,3 @@ print("")
 names(portfolio$data)
 head(portfolio$data[[1]])
 ```
-
-
-
-
-
-
-
-
-
-
-
-
-
