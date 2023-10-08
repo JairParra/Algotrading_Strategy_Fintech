@@ -52,6 +52,7 @@ library(dplyr)
 library(quantmod)
 library(tidyverse)
 library(tidyquant)
+library(rugarch)
 
 # source required scripts 
 source(here("functions", "feature_engineering.R"))
@@ -120,8 +121,8 @@ tail(sp500_stocks$Industrials[[1]])
 # BACKTESTING parameters
 
 The following code is used in the `strategy_design.rmd` markdown to
-simulate the backtesting. You can ignore most of the code here, but some
-variables are necessary.
+simulate the back-testing. You can ignore most of the code here, but
+some variables are necessary.
 
 ```{r}
 # Set up backtesting simulation parameters
@@ -203,9 +204,8 @@ list_xts_sector <- lapply(sector_data,
 # compute dynamic features for all stocks
 list_xts_sector <- lapply(list_xts_sector, 
                           f_extract_dynamic_features, 
-                          return_col = "realized_returns", 
-                           volat_col = "volat"
-                          )
+                          arima_col  = "realized_returns", 
+                           volat_col = "volat")
 
 ####### Inside SECTOR_PROCEDURE ########
 
@@ -333,10 +333,19 @@ mse_enet_best \<- numeric(15)
 mse_enet_best[ticker] \<- enet_rmse
 
 ```{r, message=FALSE, warning=FALSE}
+library("glmnet")
 set.seed(1234)
-# Initialization outside the loop
+
+# Initialization value to store all the RMSE and prediciton values 
 mse_enet_best <- numeric()
 names(mse_enet_best) <- character()
+pred <- numeric()
+real <- numeric()
+names(pred) <- character()
+names(real) <- character()
+
+# In order to refit the model and reestimate the coefficients 
+refitted_models_list <- list()
 
 # Loop for every stock ticker in sector G 
 for(ticker in sector_tickers){
@@ -374,7 +383,7 @@ for(ticker in sector_tickers){
                       target_var = "realized_returns", # y
                       volat_col = "volat", # always keep the actual volatility
                       garch_col = "vol_forecast", 
-                      nvmax = 20, # total number of max subsets
+                      nvmax = 25, # total number of max subsets
                       method="exhaustive")
 
   print(best_feat_list$fmla)
@@ -404,9 +413,29 @@ for(ticker in sector_tickers){
   best_alpha <- model_enet_best$bestTune$alpha
   best_lambda <- model_enet_best$bestTune$lambda
 
+  
+  ################################reestimating again by using all the training data ###############################
+
+  # Finding the output data 
+  y <- ticker_data_train[, "realized_returns"]
+  # <- model.matrix(reduced_fmla, data = current_stock_data)
+  # Finding the reduced features with multivariate linear regression with the training data 
+  X <- model.matrix(best_feat_list$fmla, data = ticker_data_train)
+  
+  
+  # Refit using glmnet on the reduced model
+  refitted_model <- glmnet(X, y, alpha = best_alpha, lambda = best_lambda, standardize = TRUE)
+  
+  
+  # Store the refitted model -> here is the extra to store the model and coefficients in the list of the model 
+  refitted_models_list[[ticker]] <- refitted_model
+  X_test <- model.matrix(best_feat_list$fmla, data = ticker_data_val)
+  
+  pred_enet_best <- predict(refitted_model, newx = X_test, s = refitted_model$lambda, type = "response")
+  
   # Use the best-fitted elastic net regression model to make predictions on the val_data
-  pred_enet_best <- predict(model_enet_best, ticker_data_val) # predict on val 
-  #pred_enet_best <- mean(pred_enet_best) # take the average
+  #pred_enet_best <- predict(refitted_model, ticker_data_val) # predict on val 
+  pred_enet_best <- mean(pred_enet_best) # take the average
 
   # Compute the RMSE on the validation set 
   enet_rmse <- sqrt(mse(actual = ticker_data_val[, "realized_returns"], predicted = pred_enet_best))
@@ -414,8 +443,8 @@ for(ticker in sector_tickers){
   ### Step 3: Sharpe Ratio 
   
   # Calculate the Sharpe Ratio and MSR
-  stock_sharpe <- SharpeRatio(ticker_data_train[, "realized_returns"], Rf=0, FUN="StdDev")
-  stock_msr <- SharpeRatio(ticker_data_train[, "realized_returns"], Rf=0, FUN="ES")
+  stock_sharpe <- SharpeRatio(ticker_data_train[, "realized_returns"], Rf=0.002, FUN="StdDev")
+  stock_msr <- SharpeRatio(ticker_data_train[, "realized_returns"], Rf=0.002, FUN="ES")
   
   ### Step 4: Track the measures 
   
@@ -427,6 +456,11 @@ for(ticker in sector_tickers){
 
 # Update mse_enet_best with the RMSE value for the current ticker
     mse_enet_best <- c(mse_enet_best, setNames(enet_rmse, ticker))
+    pred_enet_best <- mean(pred_enet_best)
+    real_enet <- mean(ticker_data_val[, "realized_returns"])
+    
+    pred <- c(pred, setNames(pred_enet_best, ticker)) 
+    real <- c(real, setNames(real_enet, ticker))
 
   
 
@@ -446,7 +480,7 @@ for(ticker in sector_tickers){
 sector_tracker$ADP
 ```
 
-### Visualize the codes 
+### Visualize the codes
 
 ```{r}
 library(ggplot2)
@@ -456,7 +490,7 @@ source(here("functions", "visualize_results.R"))
 # Use the function
 plot_rmse(mse_enet_best)
 
-
+plot_pred_real(pred = pred, real=real)
 ```
 
 Now that all the models have been trained and the metrics recorded, we
@@ -478,19 +512,12 @@ sector_tracker
 ```
 
 ```{r}
-## TODO: Complete the function, keep the name and parameters 
-f_select_top_stocks <- function(sector_tracker, n=3, sharpe_criterion = "MSR"){
-  ## selects the top n + n stocks (n based on forecasted return, n based on sharpe)
-  ##
-  ## Params: 
-  ##    - sector_tracker (list of lists): generated by the Loop for every stock ticker in sector G 
-  ##    - n (int): number of top stocks to choos efor each method. Top n for the predicted returns, 
-  ##              and top n for the sharpe-based. 
-  
-  
-  # should be a list of n + n stocks
-  # keys are the chosen tickers, values are the xts data for that stock
-  # i.e. you just need to select the ticker and xts data from the sector_tracker object. 
-  best_stocks <- NA 
-}
+#source(here("functions", "feature_engineering.R"))
+source(here("functions", "select_top_stocks.R"))
+
+best_stocks_list <- f_select_top_stocks(sector_tracker, n=3)
+combined_names <- best_stocks_list$combined_names
+best_stocks <- best_stocks_list$best_stocks
+combined_names
+best_stocks 
 ```

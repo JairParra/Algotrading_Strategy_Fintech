@@ -1,6 +1,6 @@
 library(ggplot2)
 
-# Define the function
+# Define the function for the rmse -> to better visualize the results 
 plot_rmse <- function(mse_values) {
   # Convert the MSE values to a data frame
   mse_data <- data.frame(
@@ -32,9 +32,9 @@ plot_pred_real <- function(pred, real) {
   # Generate a bar plot
   p <- ggplot(pred_real, aes(x = Ticker, y = Sharpe, fill = Type)) +
     geom_bar(stat = "identity", position = position_dodge()) +
-    labs(title = "Weekly Return: Predicted vs Real",
+    labs(title = "Monthly Return: Predicted vs Real",
          x = "Ticker",
-         y = "Weekly return") +
+         y = "Monthly return") +
     theme_minimal() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)) +
     scale_fill_manual(values = c("Predicted" = "skyblue", "Real" = "darkblue"))
