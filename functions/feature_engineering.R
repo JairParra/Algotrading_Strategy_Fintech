@@ -58,17 +58,11 @@ f_select_features <- function(fmla,
     # add "test" to the end of the list
     best_featnames <- c(best_featnames, volat_col)
   }
-  else{ 
-    warning("volat_col must be present in columns")
-  }
   
   # Add the garch_col if not a feature 
   if (!(garch_col %in% best_featnames) & !is.null(garch_col)) {
     # add "test" to the end of the list
     best_featnames <- c(best_featnames, garch_col)
-  }
-  else{
-    warning("garch_col must be present in columns")
   }
   
   # Construct the best formula for the linear model using the selected variables
@@ -228,7 +222,7 @@ f_add_garch_forecast <- function(stock_xts, volat_col="volat") {
 
 # Define the function
 # Define the function
-f_add_arima_forecast <- function(stock_data, return_col) {
+f_add_arima_forecast <- function(stock_data, arima_col) {
   ## Computes in-sample and OOS ARIMA(p,d,q) forecasts on the input return_col from the data. 
   ## All the combinations for p,d,q = {0,1} are computed and added.
   
@@ -236,14 +230,14 @@ f_add_arima_forecast <- function(stock_data, return_col) {
   require("forecast")
   
   # Validate input
-  if (!is.xts(stock_data) || !(return_col %in% colnames(stock_data))) {
+  if (!is.xts(stock_data) || !(arima_col %in% colnames(stock_data))) {
     print("cols(stock_data):")
     print(cols(stock_data))
     stop("Invalid input: stock_data must be an xts object and return_col must be a column in stock_data")
   }
   
   # Remove NA values from the specified column
-  stock_data_no_na <- na.omit(stock_data[, return_col, drop = FALSE])
+  stock_data_no_na <- na.omit(stock_data[, arima_col, drop = FALSE])
   
   # Calculate the number of steps to forecast based on the number of weeks 
   # of last month + 1 
@@ -270,7 +264,18 @@ f_add_arima_forecast <- function(stock_data, return_col) {
     }
     
     # autofit the best arima model 
-    fit <- Arima(ts_data, order = c(p,d,q), seasonal = c(P,D,Q))
+    fit <- tryCatch({
+      Arima(ts_data, order = c(p,d,q), seasonal = c(P,D,Q))
+    }, 
+    error = function(e){
+      warning(paste0("error for SARIMA(", p,",", d,",", q,",", P,",", D,",", Q, ") -> skipping..."))
+      return(NULL)
+    })  
+    
+    # skip this arima fit if not stationary 
+    if(is.null(fit)){
+      next
+    }
     
     # Forecast the next 4 steps (+1 of missing realized return for today)
     pred <- forecast(fit, h = num_pred_weeks)
@@ -289,7 +294,7 @@ f_add_arima_forecast <- function(stock_data, return_col) {
     
     # create an xts with the original index 
     shifted_arima_xts <- xts(shifted_arima, order.by = index(stock_data))
-    names(shifted_arima_xts) <- c(paste0("arima_", p, d, q, "_", P, D, Q, collapse=""))
+    names(shifted_arima_xts) <- c(paste0("sarima_", p, d, q, "_", P, D, Q, collapse=""))
     
     # concatenate result to original dataframe 
     stock_data <- cbind.xts(stock_data, shifted_arima_xts)
@@ -301,7 +306,7 @@ f_add_arima_forecast <- function(stock_data, return_col) {
 }
 
 f_extract_dynamic_features <- function(stock_data, 
-                                       return_col="realized_returns", 
+                                       arima_col="realized_returns", 
                                        volat_col="volat"){
   ## Computes and incorporates GARCH(1,1) 4-days-shifted forecasted volatility features 
   ## as well as 4-days-shifted forecasted returns ARIMA(p,d,q) features for all combinations 
@@ -317,7 +322,7 @@ f_extract_dynamic_features <- function(stock_data,
   require("rugarch")
   
   # Compute the ARIMA features  
-  stock_data <- f_add_arima_forecast(stock_data, return_col=return_col)
+  stock_data <- f_add_arima_forecast(stock_data, arima_col=arima_col)
   
   # Compute the GARCH features
   stock_data <- f_add_garch_forecast(stock_data, volat_col=volat_col) 
