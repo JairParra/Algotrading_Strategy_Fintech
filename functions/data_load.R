@@ -6,12 +6,18 @@
 # @author: Hair Parra
 ################################################################################
 
-###########################
-### 0. Initial Features ###
-###########################
+#########################
+### 0. Read CSV Files ###
+#########################
 
-# Function to unzip a file containing .csv datasets and load each into the environment
-load_csv_from_zip <- function(zip_file_path) {
+f_load_csv_from_zip <- function(zip_file_path) {
+  ## Function to unzip a file containing .csv datasets and load each into the environment
+  ## Objects loaded should be: 
+  ##    - data_fama_french 
+  ##    - data_financial_ratios
+  ##    - data_realized_volatility
+  ##    - data_stocks
+  
   # Create a temporary directory to unzip the files
   temp_dir <- tempdir()
   
@@ -37,8 +43,66 @@ load_csv_from_zip <- function(zip_file_path) {
   return(paste(length(csv_files), "CSV files have been loaded into the environment."))
 }
 
-# Example usage
-library("here")
-load_csv_from_zip(here("data", "raw_data.zip"))
+# # Example usage
+# library("here")
+# load_csv_from_zip(here("data", "raw_data.zip"))
+
+
+f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
+  ## Functinon load and preprocess the raw data from the csv files under raw_data.zip
+  
+  # load libraries
+  require("here")
+  
+  # load data 
+  f_load_csv_from_zip(here("data", "raw_data.zip"))
+  
+  # Process data stocks 
+  data_stocks$Date <- as.Date(data_stocks$Date, format = "%d-%m-%Y")
+  
+  # Format data_financial_ratios
+  data_financial_ratios$Date <- as.Date(data_financial_ratios$Date, format = "%d-%m-%Y")
+  data_financial_ratios$adate <- NULL
+  data_financial_ratios$qdate <- NULL
+  
+  # Format data_realized_vol, use 10 days volatility
+  data_realized_volatility <- data_realized_volatility[data_realized_volatility$days == 10, ]
+  data_realized_volatility$days <- NULL
+  colnames(data_realized_volatility)[colnames(data_realized_volatility) == "Volatility"] = "realized_vol"
+  data_realized_volatility$Date <- as.Date(data_realized_volatility$Date, format = "%d-%m-%Y")
+  
+  # Read data_fama-french.csv
+  data_fama_french$Date <- as.Date(data_fama_french$Date, format = "%d-%m-%Y")
+  
+  # Convert raw data to xts
+  xts_fama_french <- as.xts(data_fama_french, order.by = data_fama_french$Date)
+  xts_financial_ratios <- as.xts(data_financial_ratios, order.by = data_financial_ratios$Date)
+  xts_realized_vol <- as.xts(data_realized_volatility, order.by = data_realized_volatility$Date)
+  
+  # Remove additional columns 
+  xts_fama_french$Date <- NULL
+  xts_financial_ratios$Date <- NULL
+  xts_realized_vol$Date <- NULL
+  
+  # Additional preprocessing 
+  xts_financial_ratios$divyield <- gsub("%", "", xts_financial_ratios$divyield)
+  
+  # Subset period of interest for data
+  xts_fama_french <- xts_fama_french[(index(xts_fama_french) >= from) & (index(xts_fama_french) <= to)]
+  xts_financial_ratios <- xts_financial_ratios[(index(xts_financial_ratios) >= from) & (index(xts_financial_ratios) <= to)]
+  xts_realized_vol <- xts_realized_vol[(index(xts_realized_vol) >= from) & (index(xts_realized_vol) <= to)]
+  
+  # Pack into a list to return 
+  xts_extra_feats <- list(
+    xts_fama_french = xts_fama_french, 
+    xts_financial_ratios = xts_financial_ratios, 
+    xts_realized_vol = xts_realized_vol
+  )
+  
+  return(xts_extra_feats)
+}
+
+
+
 
 

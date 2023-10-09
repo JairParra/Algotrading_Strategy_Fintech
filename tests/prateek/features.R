@@ -94,7 +94,7 @@ f_fetch_feature <- function(ticker){
   df_current$Price.Book_lag1 <- lag(df_current$Book, k = 1)
   df_current$divyield_lag1 <- lag(df_current$divyield, k = 1)
   
-  # Adding Fama-French factors
+  # Adding Fama-French facto
   xts_fama_french <- df_fama_french
   xts_fama_french <- as.xts(xts_fama_french, order.by = xts_fama_french$Date)
   xts_fama_french$Date <- NULL
