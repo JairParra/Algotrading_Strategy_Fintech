@@ -777,8 +777,6 @@ select_col <- "realized_returns"
 
 
 
-
-
 ## Aside: Format for Portfolio Optimization 
 
 

@@ -153,6 +153,8 @@ portfolio <- list(tickers = initial_tickers,
                   )
 portfolio
 ```
+
+
 # MODELLING_PROCEDURE 
 
 Recall that the **SECTOR_PROCEDURE**$(G,\tau)$ function takes the argument $G$, which is the **sector name**, and **tau**, which is the current run in the backtesting. 
@@ -201,12 +203,7 @@ list_xts_sector <- lapply(list_xts_sector,
 names(list_xts_sector)
 
 # each stock has the xts subset (for window)
-head(list_xts_sector[[1]])
-```
-
-```{r}
-# save data in tests
-save(list_xts_sector, file = here("tests","jair", "sample_data.rda"))
+tail(list_xts_sector[[1]])
 ```
 
 
@@ -214,11 +211,6 @@ The result is the `list_train_val_sector` oject, which is a list of lists.
 - The first level are the stock tickers
 - The second level are train and val xts for each stock. 
 
-
-```{r}
-# Check num of rows (weeks) for window  
-nrow(list_xts_sector[[1]])
-```
 
 ### Feature Selection 
 
@@ -241,7 +233,7 @@ best_feat_list <- f_select_features(
                     target_var = "realized_returns", # future-lagged log-returns
                     volat_col = "volat", # we always want to keep the volatility col
                     garch_col = "vol_forecast", # GARCH column
-                    nvmax = 50, # maximum number of subsets to examine 
+                    nvmax = 25, # maximum number of subsets to examine 
                     method="backward") #  we always want to use forward selection
 print("")
 best_feat_list
@@ -273,7 +265,7 @@ fmla <- realized_returns ~ . -realized_returns -month_index
 
 # Create a grid for elastic net regression hyperparameters
 grid_enet <- expand.grid(alpha = seq(from = 0, to = 1, by = 0.1),  # Elastic net mixing parameter
-                         lambda = seq(from = 0, to = 0.05, by = 0.05))  # Regularization strength
+                         lambda = seq(from = 0, to = 0.05, by = 0.01))  # Regularization strength
 
 # Initialize variable to save forecasted returns, MSEs and Sharpe Ratios 
 sector_tracker <- as.list(rep(NA, length(sector_tickers)))
@@ -293,6 +285,7 @@ fmla # all initial variables
 names(sector_tracker) # list of lists 
 names(sector_tracker[[1]]) # to store the values as the loop happens
 ```
+
 ## Fitting all the models 
 
 Next, we loop through every stock doing the following: 
@@ -346,18 +339,23 @@ system.time(
                         volat_col = "volat", # always keep the actual volatility
                         garch_col = "vol_forecast", 
                         nvmax = 20, # total number of max subsets
-                        method="forward")
+                        method="backward")
   
     print(best_feat_list$fmla)
     
     ### Step 2: Elasticnet 
     
-    # Set up time-slice cross-validation parameters
-    ctr_train <- trainControl(method = "timeslice", # cross validation 
-                              initialWindow = 52,  # Consecutive number of weeks
-                              horizon = 4,         # Horizon is one month prediction (4 weeks)
-                              skip = 1,            # No skip, our data will overlap in practice
-                              fixedWindow = TRUE,   # Use a fixed window
+    # # Set up time-slice cross-validation parameters
+    # ctr_train <- trainControl(method = "timeslice", # cross validation 
+    #                           initialWindow = 52,  # Consecutive number of weeks
+    #                           horizon = 4,         # Horizon is one month prediction (4 weeks)
+    #                           skip = 1,            # No skip, our data will overlap in practice
+    #                           fixedWindow = TRUE,   # Use a fixed window
+    #                           allowParallel = TRUE) # Enable parallel processing
+    
+    # Set up K-fold CV parameters
+    ctr_train <- trainControl(method = "cv", # cross validation \
+                              number = 10, # number of folds 
                               allowParallel = TRUE) # Enable parallel processing
     
   
@@ -375,7 +373,7 @@ system.time(
     best_alpha <- model_enet_best$bestTune$alpha
     best_lambda <- model_enet_best$bestTune$lambda
     
-    # Reestimating the model using all training data 
+    # Subset features and targets for retraining
     X_train <- model.matrix(best_feat_list$fmla, data = ticker_data_train)
     X_test <- model.matrix(best_feat_list$fmla, data = ticker_data_val)
     y_train <- ticker_data_train[, "realized_returns"]
@@ -390,7 +388,7 @@ system.time(
     # Compute the RMSE on the validation set 
     enet_rmse <- sqrt(mse(actual = ticker_data_val[, "realized_returns"], predicted = pred_enet_best))
     
-  
+
     ### Step 3: Sharpe Ratio 
     
     # Calculate the Sharpe Ratio and MSR (on historical discrete returns)
@@ -404,7 +402,7 @@ system.time(
     # Calculate the ES and set risk-free 
     VaR <- quantile(hist_returns, 0.05) 
     ES <- mean(hist_returns[hist_returns < VaR])
-    Rf <- 0.002
+    Rf <- 0.0002 # 0 
                          
     # Calculate the Sharpe and MSR
     stock_sharpe <- ((mean_rets- Rf)/ std_rets ) * sqrt(scaling_factor) # annualized
@@ -420,7 +418,7 @@ system.time(
                                                    "best_shifted_arima", 
                                                    "volat",
                                                    "vol_forecast")] # features to be kept
-  
+
     # show values
     print("*****************************************")
     print(paste("forecasted_ret: ", pred_enet_best))
@@ -433,6 +431,7 @@ system.time(
   }
 )
 ```
+
 Now that all the models have been trained and the metrics recorded, we now simply choose the top 3 stocks based on the return, and the top 3 based on the best sharpe or modified sharpe ratio. 
 
 Let's first show some values for the `sector_tracker` object: 
@@ -453,3 +452,13 @@ best_sector_stocks <- f_select_top_stocks(sector_tracker, n=3)
 names(best_sector_stocks)
 best_sector_stocks
 ```
+```{r}
+# pack the data into a format for modelling (only keep the data)
+top_sector_stocks <- lapply(best_sector_stocks, function(x) x$data)
+top_sector_stocks[[1]]
+```
+
+```{r}
+save(top_sector_stocks, file = here("tests","jair", "top_sector_stocks.rda"))
+```
+
