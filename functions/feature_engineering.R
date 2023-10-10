@@ -146,10 +146,10 @@ f_fetch_ind_base <- function(ticker, from, to){
                  "direction_lead", 
                  "discrete_returns",
                  "realized_returns",# stock_adjclose_lead = TARGET
-                 "adjclose_lag0", # "adjclose_lag0" = 
-                 "adjclose_lag1", 
-                 "adjclose_lag2",
-                 "adjclose_lag3",
+                 "log_returns_lag0", # "adjclose_lag0" = 
+                 "log_returns_lag1", 
+                 "log_returns_lag2",
+                 "log_returns_lag3",
                  "atr", "adx", "aaron", "bb", "chaikin_vol", "clv", 
                  "emv", "macd", "mfi", "sar", "smi", 
                  "volume", 
@@ -232,6 +232,9 @@ f_fetch_ind_base <- function(ticker, from, to){
     # remove temp object 
     xts_ticker_realized_vol <- NULL
   }
+  else{
+    warning(paste0("No IV data for ticker ", ticker, ", skipping..."))
+  }
 
   return(xts_ticker)
 }
@@ -250,7 +253,6 @@ f_fetch_all_tickers <- function(tickers,
                               f_fetch_ind_base(x, from = from, to=to)
                             }, error = function(e){ 
                               print(paste0("error with ticker: ", x, ", skipping..."))
-                              return(NA)
                               }
                             )
                               ,
@@ -489,6 +491,98 @@ f_add_arima_forecast <- function(stock_data, arima_col) {
   # Return the modified xts object
   return(stock_data)
 }
+
+
+f_add_arima_forecast_lapply <- function(stock_data, arima_col) {
+  
+  # Import libraries
+  require("xts")
+  require("forecast")
+  
+  # Validate input
+  if (!is.xts(stock_data) || !(arima_col %in% colnames(stock_data))) {
+    stop("Invalid input: stock_data must be an xts object and return_col must be a column in stock_data")
+  }
+  
+  # Remove NA values
+  stock_data_no_na <- na.omit(stock_data[, arima_col, drop = FALSE])
+  
+  # Calculate the number of steps to forecast
+  num_pred_weeks <- nrow(stock_data[stock_data$month_index == tail(as.vector(stock_data[, "month_index"]),1), ])
+  
+  # Convert to basic time series
+  ts_data <- as.ts(coredata(stock_data_no_na[, 1]))
+  
+  # Generate combinations of p, d, q
+  pdq_combinations <- expand.grid(p = 0:1, d = 0:2, q = 0, P = 0, D = 0:1, Q = 1)
+  
+  # Initialize the best model tracker
+  lowest_sigma2 <- Inf
+  best_shifted_arima <- NULL
+  
+  # Function to encapsulate the loop logic
+  arima_logic <- function(pdq_row) {
+    p <- pdq_row["p"]
+    d <- pdq_row["d"]
+    q <- pdq_row["q"]
+    P <- pdq_row["P"]
+    D <- pdq_row["D"]
+    Q <- pdq_row["Q"]
+    
+    # Skip if 000
+    if(p == 0 & d == 0 & q == 0) {
+      return(NULL)
+    }
+    
+    # Fit ARIMA model
+    fit <- tryCatch({
+      Arima(ts_data, order = c(p,d,q), seasonal = c(P,D,Q))
+    }, error = function(e) {
+      warning(paste0("error for SARIMA(", p,",", d,",", q,",", P,",", D,",", Q, ") -> skipping..."))
+      return(NULL)
+    })
+    
+    # Skip non-stationary fits
+    if(is.null(fit)) {
+      return(NULL)
+    }
+    
+    # Forecast
+    pred <- forecast(fit, h = num_pred_weeks)
+    pred_is <- fit$fitted
+    arima_forecast <- as.vector(pred$mean)
+    shifted_arima <- c(pred_is, arima_forecast)
+    shifted_arima <- tail(shifted_arima, nrow(stock_data))
+    shifted_arima_xts <- xts(shifted_arima, order.by = index(stock_data))
+    names(shifted_arima_xts) <- c(paste0("sarima_", p, d, q, "_", P, D, Q, collapse=""))
+    
+    return(list(shifted_arima_xts, fit$sigma2))
+  }
+  
+  # Apply function over combinations
+  arima_results <- lapply(1:nrow(pdq_combinations), function(i) {
+    arima_logic(pdq_combinations[i, ])
+  })
+  
+  # Filter out NULLs
+  arima_results <- Filter(Negate(is.null), arima_results)
+  
+  # Get best model
+  best_result <- Reduce(function(a, b) {
+    if (is.null(a) || b[[2]] < a[[2]]) return(b) else return(a)
+  }, arima_results)
+  
+  best_shifted_arima <- best_result[[1]]
+  names(best_shifted_arima) <- "best_shifted_arima"
+  
+  # Combine all columns with stock_data
+  all_arima_cols <- do.call(cbind, lapply(arima_results, `[[`, 1))
+  stock_data <- cbind.xts(stock_data, all_arima_cols, best_shifted_arima)
+  
+  return(stock_data)
+}
+
+
 
 f_extract_dynamic_features <- function(stock_data, 
                                        arima_col="realized_returns", 
