@@ -9,12 +9,29 @@
 ### 0. Setup ###
 ################
 
+# load required scripts
+library("here") 
+source(here("functions", "fetch_sp500_sectors.R")) # functions for top stocks and economic sectors in the sp500
+source(here("functions", "feature_engineering.R")) # functions for feat eng and manipulation
 
 ###########################
 ### 1. Modelling Logic  ###
 ###########################
 
-
+f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3){
+  ### This function does the following: 
+  ##    - Extracts the appropriate window of data for all stocks in the sector 
+  ##    - Computes dynamic features for all stocks in the sector 
+  ##    - Loops through every ticker, performing feature selection, hyperparameter 
+  ##      tuning and model selection, produces forecasts and calculates a number of metrics. 
+  ##    - Store the result in an object `sector_tracker`
+  ##    - Chooses the best n stocks based on two criteria: best forecasted returns, 
+  ##      and best historical Sharpe Ratio. 
+  ##
+  ## Returns: 
+  ##    - top_sector_stocks (named list)
+  NULL
+}
 
 ############################
 ### 2. Best Tickers Data ###

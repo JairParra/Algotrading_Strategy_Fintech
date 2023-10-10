@@ -94,7 +94,6 @@ f_fetch_sp500_sector_data <- function(x){
 }
 
 
-
 f_retrieve_top_sp500 <- function(top_n_sectors = 11, top_n_stocks = 10, only_tickers=TRUE){
   ## function that retrieves the top 10 stocks (and data) with highest weight for every 
   ## economic sector in the SP500, based on weight allocated. 

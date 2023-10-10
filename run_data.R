@@ -7,7 +7,7 @@
 # @author: Prateek 
 # 
 # This script contains the logic to extract and process the raw data for this 
-# project. 
+# project. The preprocessed data is saved under data_clean/
 ################################################################################
 
 
@@ -15,15 +15,37 @@
 ### 0. Libraries and Source files ###
 #####################################
 
-# packages
+# load required scripts
 library("here") 
-
 source(here("functions", "data_load.R")) # raw data reading + minimal preprocessing
-source(here("functions", "technical_indicators.R")) # technical indicators functions
+source(here("functions", "fetch_sp500_sectors.R")) # functions for top stocks and economic sectors in the sp500
+source(here("functions", "feature_engineering.R")) # functions for feat eng and manipulation
 
-#####################################
-### 1. Data Load  ###
-#####################################
+######################################
+### 1. Data Load and Preprocessing ###
+######################################
 
-# Loads the raw data 
-f_preload_raw_data()
+# Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
+sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_tickers=TRUE)
+
+# function to fetch all the information for one ticker into a nice xts dataframe 
+sp500_stocks <- lapply(sector_list, 
+                       f_fetch_all_tickers, 
+                       start_date="2016-01-01",
+                       end_date="2022-12-01") 
+
+# Clean the environment 
+xts_fama_french <- NULL 
+xts_financial_ratios <- NULL 
+xts_realized_vol <- NULL
+sp500 <- NULL
+sp500_sectors <- NULL
+
+# save preprocessed data in a data_clean 
+save(sp500_stocks, file = here("data_clean", "sp500_stocks.rda"))
+
+
+
+
+
+

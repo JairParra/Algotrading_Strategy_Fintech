@@ -129,7 +129,7 @@ N_sector_best_stocks <- 3 # new strategy: 3x2 = 6
 # Formula parameters
 slide <- 1 
 N_months <- length(names(split.xts(sample_xts, f= "months")))
-N_window <- 24 # number of months in size for each window 
+N_window <- 18 # number of months in size for each window 
 N_runs <- floor((N_months - N_window)/slide)
 
 # display parameters
