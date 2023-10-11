@@ -58,4 +58,6 @@ rsconnect/
 
 # Other files 
 -MSI
-*MSI*
+*-MSI*
+*~$w*
+*.tmp

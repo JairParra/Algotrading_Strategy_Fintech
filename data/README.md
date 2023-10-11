@@ -1,9 +1,5 @@
 # data 
 
-This folder contains all the raw data used in this project. 
-
-## Getting the data 
-
 For this project we used Wharton Research Data Services (WRDS) to extract our data.
 
 ### Stock Price Data

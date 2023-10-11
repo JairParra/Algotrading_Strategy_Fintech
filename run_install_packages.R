@@ -20,14 +20,16 @@ proj_packages <- c(
   "zoo", 
   "TTR", 
   "here", 
+  "leaps",
   "rvest", 
   "dplyr", 
+  "Metrics", 
   "quantmod", 
   "forecast", 
   "data.table", 
   "tidyverse", 
   "tidyquant", 
-  "PerformanceAnalytics", 
+  "PerformanceAnalytics"
 )
 
 ####################
@@ -35,7 +37,7 @@ proj_packages <- c(
 ####################
 
 # Load required packages
-load_packages <- function(package_list) {
+f_load_packages <- function(package_list) {
   for (package in package_list) {
     # Check if the package is already installed
     if (!requireNamespace(package, quietly = TRUE)) {
@@ -52,4 +54,4 @@ load_packages <- function(package_list) {
 ###############
 
 # Call the function to load packages
-load_packages(proj_packages)
+f_load_packages(proj_packages)
