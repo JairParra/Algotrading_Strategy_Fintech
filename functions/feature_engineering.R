@@ -18,18 +18,6 @@ library("here")
 source(here("functions", "data_load.R")) # raw data reading + minimal preprocessing
 source(here("functions", "technical_indicators.R")) # technical indicators functions
 
-# load required csv files data into memory 
-extra_feats_xts <- f_preload_raw_data(from="2016-01-01", to="2022-12-31")
-xts_fama_french <- extra_feats_xts$xts_fama_french
-xts_financial_ratios <- extra_feats_xts$xts_financial_ratios
-xts_realized_vol <- extra_feats_xts$xts_realized_vol
-
-# Clean the environment 
-data_fama_french <- NULL 
-data_financial_ratios <- NULL
-data_realized_volatility <- NULL
-data_stocks <- NULL
-extra_feats_xts <- NULL
 
 ################################################################################
 
@@ -63,8 +51,17 @@ f_assign_int_month_index <- function(xts_data) {
 }
 
 
-f_fetch_ind_base <- function(ticker, from, to){
+f_fetch_ind_base <- function(ticker, from, to, extra_feats_xts){
   ### Fetches data and performs feature engineering for specified ticker
+  
+  
+  ###########################
+  ### Additional Raw data ###
+  ###########################
+  
+  xts_fama_french <- extra_feats_xts$xts_fama_french
+  xts_financial_ratios <- extra_feats_xts$xts_financial_ratios
+  xts_realized_vol <- extra_feats_xts$xts_realized_vol
   
   ########################
   ### Base Engineering ###
@@ -241,18 +238,24 @@ f_fetch_all_tickers <- function(tickers,
                                 start_date = "2016-01-01", 
                                 end_date = "2022-12-31"){ 
   
+  # load required csv files data into memory
+  extra_feats_xts <- f_preload_raw_data(from="2016-01-01", to="2022-12-31")
+  
   # Use lapply to download all the tickers data at once for dates
   # between start_date and end_date
   list_stock_data <- lapply(tickers,
-                            function(x, from, to) tryCatch({
-                              f_fetch_ind_base(x, from = from, to=to)
+                            function(x, from, to, extra_feats_xts) tryCatch({
+                              f_fetch_ind_base(x, from = from, to=to, 
+                                               extra_feats_xts = extra_feats_xts)
                             }, error = function(e){ 
                               print(paste0("error with ticker: ", x, ", skipping..."))
                               }
                             )
                               ,
                             from = as.Date(start_date), 
-                            to = as.Date(end_date))
+                            to = as.Date(end_date), 
+                            extra_feats_xts = extra_feats_xts
+                            )
   
   # Create a list containing the tickers (stock names) and the stock data
   list_stock_data <- list(tickers = tickers,
@@ -263,6 +266,13 @@ f_fetch_all_tickers <- function(tickers,
   
   # remove all ticker with null data 
   list_stock_data <- compact(list_stock_data)
+  
+  # Clean the environment
+  data_fama_french <- NULL
+  data_financial_ratios <- NULL
+  data_realized_volatility <- NULL
+  data_stocks <- NULL
+  extra_feats_xts <- NULL
   
   return(list_stock_data)
   

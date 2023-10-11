@@ -26,8 +26,8 @@ f_load_sp500 <- function(){
   return(sp500)
 }
 
-# load into env 
-sp500 <- f_load_sp500()
+# # load into env 
+# sp500 <- f_load_sp500()
 
 f_get_sp500_sectors <- function(){
   ## Returns the SP500 components and their respective economic sectors
@@ -60,9 +60,9 @@ f_get_sp500_sectors <- function(){
   # Print the dataframe
   return(sp500_sectors)
 }
-
-# load into env 
-sp500_sectors <- f_get_sp500_sectors()
+# 
+# # load into env 
+# sp500_sectors <- f_get_sp500_sectors()
 
 
 # function to fetch the tickers, weights and no.shares held for an economic sector 

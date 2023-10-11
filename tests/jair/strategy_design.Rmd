@@ -69,6 +69,12 @@ In order to test the logic within the strategy, I have fetched functions that re
 
 The following function fetches and extract the economic sectors from the SP500, taken from [Wikipedia](https://en.wikipedia.org/wiki/List_of_S%26P_500_companies). 
 
+```{r}
+# load sp500 data 
+sp500 <- f_load_sp500()
+head(sp500)
+```
+
 
 ```{r, message=FALSE}
 # fetch the sectors as a dataframe 

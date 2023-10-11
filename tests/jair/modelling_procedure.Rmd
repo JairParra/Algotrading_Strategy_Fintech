@@ -65,8 +65,8 @@ The following function fetches and extract the economic sectors from the SP500, 
 ```{r, message=FALSE}
 # NOTE: not necessary to run anymore
 # fetch the sectors as a dataframe 
+sp500 <- f_load_sp500()
 sp500_sectors <- f_get_sp500_sectors()
-head(sp500_sectors)
 ```
 
 ## Retrieving top sectors and stocks 
@@ -168,7 +168,7 @@ This procedure happens in a loop, for every sector $G$. Here, we fix one sector 
 
 ```{r}
 # parameters 
-G <- names(sp500_stocks)[1] # sample sector 
+G <- names(sp500_stocks)[2] # sample sector 
 tau <- 10 # suppose we are in run 5 of the backtest 
 
 ####### Inside SECTOR_PROCEDURE ######## 
@@ -196,6 +196,10 @@ list_xts_sector <- lapply(list_xts_sector,
                           arima_col = "realized_returns", 
                           volat_col = "volat"
                           )
+
+
+# list of tickers may be smaller 
+sector_tickers <- names(sector_data)
 
 ####### Inside SECTOR_PROCEDURE ########
 
@@ -332,7 +336,8 @@ system.time(
     ### Step 1: Feature Selection 
   
     # Perform feature selection for that stock
-    best_feat_list <- f_select_features(
+    best_feat_list <- tryCatch({
+          f_select_features(
                         fmla = fmla, # formula for regression
                         data = ticker_data_train, # train data for one stock of current sector
                         target_var = "realized_returns", # forecast future log returns
@@ -340,6 +345,19 @@ system.time(
                         garch_col = "vol_forecast", 
                         nvmax = 20, # total number of max subsets
                         method="backward")
+    }, 
+    error = function(e){
+      warning(paste0("error with ticker ", ticker))
+      return(NULL)
+    }
+    )
+    
+    # skip if ticker had some weir error but data is correct
+    if(is.null(best_feat_list)){
+      warning(paste0("broken ticker ", ticker, "skipping"))
+      sector_tickers <- c(ticker, sector_tickers)
+      next
+    }
   
     print(best_feat_list$fmla)
     
