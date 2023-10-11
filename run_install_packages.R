@@ -14,15 +14,26 @@
 ### 0. Setup ###
 ################
 
+# load required scripts
+library("here") 
+source(here("functions", "modelling.R")) 
+
+################
+### 0. Setup ###
+################
+
 # List of packages to automatically install 
 proj_packages <- c(
   "xts", 
   "zoo", 
   "TTR", 
-  "here", 
+  "here",
+  "stats",
   "leaps",
   "rvest", 
   "dplyr", 
+  "caret", 
+  "glmnet", 
   "Metrics", 
   "quantmod", 
   "forecast", 

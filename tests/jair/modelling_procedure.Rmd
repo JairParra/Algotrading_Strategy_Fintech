@@ -188,14 +188,14 @@ list_xts_sector <- lapply(sector_data,
                           f_extract_window, 
                           tau=tau, # current run 
                           n_months = N_window# size of window 
-                          )
+)
 
 # compute dynamic features for all stocks
 list_xts_sector <- lapply(list_xts_sector, 
-                          f_extract_dynamic_features, 
+                          suppressWarnings(f_extract_dynamic_features), 
                           arima_col = "realized_returns", 
                           volat_col = "volat"
-                          )
+)
 
 
 # list of tickers may be smaller 
@@ -207,7 +207,7 @@ sector_tickers <- names(sector_data)
 names(list_xts_sector)
 
 # each stock has the xts subset (for window)
-tail(list_xts_sector[[1]])
+tail(list_xts_sectors[[1]])
 ```
 
 
@@ -224,7 +224,7 @@ Notes:
 - `f_select_features()` is found under `functions/feature_engineering.R`
 
 ```{r}
-# Extract a sample stock in the list_xts_sector
+# Extract a sample stock in the list_xts_sectors
 sample_sector_stock <- list_xts_sector[[1]]
 
 # Define the formula for regression
@@ -257,6 +257,7 @@ $$
   + (1-\alpha)||\beta||_{2}^{2}
 \right]
 $$
+
 
 
 ```{r, message=FALSE}
@@ -309,10 +310,7 @@ system.time(
     print(paste0("ticker: ", ticker))
     
     ### Step 0: Data Preparation 
-    
-    ###########################################################################
-    ### NOTE: Need to refactor 
-    
+  
     # fetch data for that ticker 
     full_train <- list_xts_sector[[ticker]]
     
