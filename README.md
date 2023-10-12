@@ -1,5 +1,82 @@
 # Algotrading_Strategy_Fintech
-The objective is to create a realistic investment strategy based on several machine learning techniques seen during the masters course *Machine Learning Applied to Financial Data*, at HEC Montréal. 
+The objective is to create a realistic investment strategy based on several machine learning techniques seen during the masters course *Machine Learning Applied to Financial Data*, at HEC Montréal.
+
+## Dataset 
+
+Describe the: 
+- **Raw data:** desc
+    - **Preprocessing steps:** 
+        1. Step 1 
+        2. Step 2 
+
+- **Clean data** desc
+
+## Simulation Assumptions 
+
+TODO 
+
+# Workflow
+
+## Entrypoint(s) 
+
+Should be the SECTOR_PROCEDURE 
+-> calls  
+
+## Stategy description 
+
+General description. 
+
+### Workflow: 
+-> 
+
+
+### MODELLING_PROCEDURE
+
+$$
+N^{runs} = \left\lfloor 
+    \dfrac{N_{months} - N_W}{s} 
+\right\rfloor
++ 1
+$$
+
+$$
+\mathcal{L}(\beta) 
+= 
+\dfrac{1}{2}
+\sum_{i=1}^{n}(y_i - x_{i}^T\beta)^{2}
++ 
+\lambda\left[
+  \alpha ||\beta||_1 
+  + (1-\alpha)||\beta||_{2}^{2}
+\right]
+$$
+
+1. Sector $G$ contains tickers $\{S_1,S_1,\dots,  S_{|G|}\}$, where $|G|$= number of stocks per sector (before selection). 
+2. For each ticker, want to calculate **current window:**
+
+$$
+\left[
+  t_1 = \text{week } W_{s\times\tau}
+  \;,\;
+  t_{12} = \text{week } W_{s\times\tau + 11}
+\right]
+$$ 
+
+e.g. with $s=1$ (slide one month at the time)
+
+$$
+\begin{cases}
+\tau = 1 \implies [t_1 = W_{1} \;,\; t_{12} = W_{12}] \\ 
+\tau = 2 \implies [t_1 = W_{2} \;,\; t_{12} = W_{13}] \\ 
+\vdots \\ 
+\tau = i \implies [t_1 = W_{i} \;,\; t_{12} = W_{i+11}] \\ 
+\vdots \\ 
+\tau = T \implies [t_1 = W_{T-12} \;,\; t_{12} = W_{T}]
+\end{cases}
+$$
+
+
+# OLD (TO DELETE)
 
 ## Dataset 
 
