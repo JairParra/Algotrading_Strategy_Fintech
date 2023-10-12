@@ -236,7 +236,14 @@ f_fetch_ind_base <- function(ticker, from, to, extra_feats_xts){
 # and packs it into a list (or a list of lists if nested_list=TRUE,)
 f_fetch_all_tickers <- function(tickers, 
                                 start_date = "2016-01-01", 
-                                end_date = "2022-12-31"){ 
+                                end_date = "2022-12-31", 
+                                verbose = FALSE
+                                ){ 
+  
+  if(verbose){
+    print("running f_fetch_all_tickers...")
+    print(tickers)
+  }
   
   # load required csv files data into memory
   extra_feats_xts <- f_preload_raw_data(from="2016-01-01", to="2022-12-31")

@@ -57,6 +57,15 @@ weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
 returns <- rep(NA, N_runs) # returns for the portfolio across time 
 num_shares <- rep(NA, length(weights))
 
+# # repack the portfolio for tracking
+# portfolio <- list(tickers = initial_tickers, # old version
+#                   weights = weights,
+#                   num_shares = num_shares,
+#                   capital = initial_capital,
+#                   returns = returns
+#                   )
+
+
 # repack the portfolio for tracking 
 # Note: 
 # assets = list of tickers
@@ -85,21 +94,15 @@ tau <- 10 # suppose we are in run 5 of the backtest
 
 system.time({
   # run simulation for one sector with verbose 
-  best_sector_stocks <- f_MODELLING_PROCEDURE(G, tau, sp500_stocks, best_n = 6, verbose=TRUE)
+  best_sector_stocks <- f_MODELLING_PROCEDURE(G, tau, sp500_stocks, best_n = 5, verbose=TRUE)
   
   # pack the data into a format for modelling (only keep the data)
   top_sector_stocks <- lapply(best_sector_stocks, function(x)x$data) 
 })
 
-# 
-# # save for kriti 
-# save(top_sector_stocks, file = here("tests", "jair", "top_sector_stocks.rda"))
 
 
-
-###################################
-### X. MODELLING PROCEDURE TEST ###
-###################################
+save(top_sector_stocks, file = here("tests", "jair", "top_sector_stocks.rda"))
 
 
 

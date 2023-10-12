@@ -27,7 +27,7 @@ f_select_top_stocks <- function(sector_tracker, n=3){
   ##    - n (int): number of top stocks to choos efor each method. Top n for the predicted returns, 
   ##              and top n for the sharpe-based. 
   
-  # Extract the top 3 tickers with the highest Sharpe ratio
+  # Extract the top n tickers with the highest Sharpe ratio
   top_sharpe <- names(sort(sapply(sector_tracker, function(x) x$sharpe), decreasing=TRUE))[1:n]
   top_fore_rets <- names(sort(sapply(sector_tracker, function(x) x$forecasted_ret), decreasing=TRUE))[1:n]
   
@@ -38,7 +38,8 @@ f_select_top_stocks <- function(sector_tracker, n=3){
   best_stocks_data <- sector_tracker[top_tickers]
   
   # Check if forecasted_ret > 0 for each element in the list
-  positive_forecast <- sapply(best_stocks_data, function(x) x$forecasted_ret > 0)
+  positive_forecast <- sapply(best_stocks_data, function(x){
+    x$forecasted_ret > 0 & x$forecasted_direction == "up"})
   
   # Filter the list based on the condition
   best_stocks_data <- best_stocks_data[positive_forecast]
@@ -56,6 +57,7 @@ f_fit_models <- function(list_xts_sector,
                          sector_tickers,
                          sector_tracker, 
                          fmla, 
+                         fmla_rf, 
                          grid_enet, 
                          verbose=FALSE){
   ### This function does the following: 
@@ -73,7 +75,8 @@ f_fit_models <- function(list_xts_sector,
   ##    - sector_tickers (vector): names(list_xts_sector)
   ##    - sector_tracker (named list): tracking object for sector statistics and columns 
   ##                                     needed for further optimization. 
-  ##    - fmla (R formula): overall model formula for the model, including all features
+  ##    - fmla (R formula): overall regression model formula for the model, including all features
+  ##    - fmla (R formula): overall classification model formula for the model, including all features
   ##    - verbose (logical): if TRUE, show obtained formula and metrics at each iteration 
   ##    - verbose (logical): if TRUE, show obtained formula and metrics at each iteration 
   ##                    
@@ -112,6 +115,14 @@ f_fit_models <- function(list_xts_sector,
     # re-stack train and val for later
     full_train <- rbind.xts(ticker_data_train, ticker_data_val)
     
+    # modify train and val for the random forest classification 
+    ticker_data_train <- as.data.frame(ticker_data_train)
+    ticker_data_val <- as.data.frame(ticker_data_val) 
+
+    # convert column as factor for classification ("up", "down")
+    ticker_data_train$direction_lead <- factor(ticker_data_train$direction_lead, levels=c(1,-1), labels=c("up", "down"))
+    ticker_data_val$direction_lead <- factor(ticker_data_val$direction_lead, levels=c(1,-1), labels=c("up", "down"))
+
     ###########################################################################
     
     ### Step 1: Feature Selection 
@@ -153,7 +164,6 @@ f_fit_models <- function(list_xts_sector,
                               number = 10, # number of folds 
                               allowParallel = TRUE) # Enable parallel processing
     
-    
     # Train the elastic net regression model using time-slice cross-validation
     model_enet_best <- train(form = best_feat_list$fmla,            # Formula from feature selection
                              data = ticker_data_train,              # Training data 
@@ -186,7 +196,36 @@ f_fit_models <- function(list_xts_sector,
     
     ###########################################################################
     
-    ### Step 3: Sharpe Ratio 
+    ### Step 3: Random Forest 
+    
+    # Configure trainControl for time-based cross-validation
+    ctr_train <- trainControl(
+      method = "cv", # cross validation
+      number = 10, # number of folds 
+      classProbs = TRUE, # Include class probabilities
+      allowParallel = TRUE # Allow parallel processing if available
+    )
+    
+    # Train a random forest model for the current stock
+    model_rf <- train(
+      form = fmla_rf,              # Formula specifying the response and predictors
+      data = ticker_data_train,   # The training data
+      method = "ranger",           # The model algorithm to be used ("ranger" for random forest)
+      trControl = ctr_train,       # Control parameters for the train function
+      metric = "Kappa",            # Performance metric to be used for model tuning
+      tuneLength = 1               # Number of different hyperparameter settings to try
+    )
+    
+    # Forecast the direction lead with the model
+    direction_forecast <- predict(model_rf,
+                                  newdata = ticker_data_val,
+                                  type = "prob")
+    
+
+    # Extract only the forecast for next week (one week ahead) 
+    direction_forecast <- ifelse(mean(direction_forecast$up) > 0.5, "up", "down")
+    
+    ###########################################################################
     
     # Calculate the Sharpe Ratio and MSR (on historical discrete returns)
     scaling_factor <- as.vector(ticker_data_val$month_index)[1] - as.vector(ticker_data_train$month_index)[1]
@@ -210,17 +249,20 @@ f_fit_models <- function(list_xts_sector,
     ### Step 4: Track the measures 
     
     sector_tracker[[ticker]]$forecasted_ret = pred_enet_best
+    sector_tracker[[ticker]]$forecasted_direction = direction_forecast
     sector_tracker[[ticker]]$rmse = enet_rmse
     sector_tracker[[ticker]]$sharpe = stock_sharpe
     sector_tracker[[ticker]]$msr = stock_msr
     sector_tracker[[ticker]]$data = full_train[, c("realized_returns",
                                                    "best_shifted_arima", 
                                                    "volat",
-                                                   "vol_forecast")] # features to be kept
+                                                   "vol_forecast",
+                                                   "month_index")] # features to be kept
     
     # show values
     if(verbose){
       print("*****************************************")
+      print(paste("forecasted direction: ", direction_forecast))
       print(paste("forecasted_ret: ", pred_enet_best))
       print(paste("rmse: ", enet_rmse))
       print(paste("sharpe: ", stock_sharpe))
@@ -235,7 +277,7 @@ f_fit_models <- function(list_xts_sector,
 }
 
 
-f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, verbose=FALSE){
+f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, model_type = "elasticnet", verbose=FALSE){
   ### This function does the following: 
   ##    - Extracts the appropriate window of data for all stocks in the sector 
   ##    - Computes dynamic features for all stocks in the sector 
@@ -250,6 +292,7 @@ f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, verbose=FALS
   ##    - tau (int): integer > 0 which represents the current run in the backtest
   ##    - sp500_stocks (named list): List of industries and each industry contains stock data 
   ##                                 for each of those sectors. 
+  ##    - model_type (str): one of 'elasticnet' and 'lasso' 
   ##    - best_n (int): positive integer indicating the number of best stocks to pick 
   ##    - verbose (logical): if TRUE, show obtained formula and metrics at each iteration 
   ##                    
@@ -304,12 +347,23 @@ f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, verbose=FALS
   
   if(verbose) print("###### 2. Modelling Setup ######")
   
-  # Define the formula for regression
-  fmla <- realized_returns ~ . -realized_returns -month_index
+  # Define the formula for regression and classification 
+  fmla <- realized_returns ~ . -realized_returns -direction_lead -month_index # for regression (Elasticnet)
+  fmla_rf <- direction_lead ~ . -realized_returns -direction_lead -month_index # for random forests
   
-  # Create a grid for elastic net regression hyperparameters
-  grid_enet <- expand.grid(alpha = seq(from = 0, to = 1, by = 0.1),  # Elastic net mixing parameter
-                           lambda = seq(from = 0, to = 0.05, by = 0.01))  # Regularization strength
+  if(model_type == "elasticnet"){
+    # Create a grid for elastic net regression hyperparameters
+    grid_enet <- expand.grid(alpha = seq(from = 0, to = 1, by = 0.1),  # Elastic net mixing parameter
+                             lambda = seq(from = 0, to = 0.05, by = 0.01))  # Regularization strength
+  }
+  else if(model_type == "lasso"){
+    # Create a grid for lassonet regression hyperparameters
+    grid_enet <- expand.grid(alpha = 1,  # Lasso 
+                             lambda = seq(from = 0, to = 0.05, by = 0.0005))  # Regularization strength
+  }
+  else{ 
+    stop("Invalid method selected. Should be one of 'elasticnet' and 'lasso'.")
+  }
   
   # Initialize variable to save forecasted returns, MSEs and Sharpe Ratios 
   sector_tracker <- as.list(rep(NA, length(sector_tickers)))
@@ -334,8 +388,9 @@ f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, verbose=FALS
   sector_tracker <- f_fit_models(list_xts_sector, 
                                  sector_tickers, 
                                  sector_tracker, 
-                                 fmla = fmla, 
-                                 grid_enet = grid_enet, 
+                                 fmla = fmla, # formula for regression
+                                 fmla_rf = fmla_rf, # formula for classification (Random Forests)
+                                 grid_enet = grid_enet, # will determine lasso or elastic params 
                                  verbose=verbose)
   
   ############################

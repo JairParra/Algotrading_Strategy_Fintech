@@ -46,7 +46,7 @@ f_load_csv_from_zip <- function(zip_file_path) {
 
 # # Example usage
 # library("here")
-# load_csv_from_zip(here("data", "raw_data.zip"))
+# f_load_csv_from_zip(here("data", "raw_data.zip"))
 
 
 f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
@@ -56,7 +56,7 @@ f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
   require("here")
   
   # load data 
-  f_load_csv_from_zip(here("data", "raw_data.zip"))
+  f_load_csv_from_zip(here("data", "data.zip"))
   
   # Process data stocks 
   data_stocks$Date <- as.Date(data_stocks$Date, format = "%d-%m-%Y")
