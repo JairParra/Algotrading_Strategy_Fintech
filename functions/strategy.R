@@ -18,7 +18,7 @@ source(here("functions", "modelling.R")) # modelling procedure
 ### 1. Utils ###
 ################
 
-f_read_stock_price <- function(sp500_stocks, sector_name, ticker, date = NULL){
+f_read_stock_price <- function(sp500_stocks_flat, ticker, date = NULL){
   
   ## Retrieves the selected price of the ticker in question 
   price <- as.numeric(sample_stock_close[index(sample_stock_close) == date])
@@ -35,7 +35,7 @@ f_read_stock_price <- function(sp500_stocks, sector_name, ticker, date = NULL){
 f_CLOSE_positions <- function(portfolio, tau){
   ## Closing the positions in the portfolio means: 
   ## 
-  ## 0. Calculate number of (fractional) shares per ticker: num_shares = weight
+  ## 0. Calculate number of (fractional) shares per ticker: num_shares = weight * capital 
   ## 1. Sell each ticker and gain CF += num_shares * cur_price 
   ## 2. Clear all cur tickers and new portfolio value is cur_capital + sum(CF_tickers) 
   
@@ -45,7 +45,7 @@ f_CLOSE_positions <- function(portfolio, tau){
     return(portfolio)
   }
   
-  #
+  # Etract tickers 
   
 }
 

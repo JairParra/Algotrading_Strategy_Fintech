@@ -37,7 +37,7 @@ sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_t
 system.time(
   sp500_stocks <- lapply(sector_list, 
                          f_fetch_all_tickers, 
-                         start_date="2016-01-01",
+                         start_date="2018-01-01",
                          end_date="2022-12-01")  
 )
 

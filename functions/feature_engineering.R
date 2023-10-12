@@ -246,7 +246,7 @@ f_fetch_all_tickers <- function(tickers,
   }
   
   # load required csv files data into memory
-  extra_feats_xts <- f_preload_raw_data(from="2016-01-01", to="2022-12-31")
+  extra_feats_xts <- f_preload_raw_data(from=start_date, to=end_date)
   
   # Use lapply to download all the tickers data at once for dates
   # between start_date and end_date
@@ -255,7 +255,8 @@ f_fetch_all_tickers <- function(tickers,
                               f_fetch_ind_base(x, from = from, to=to, 
                                                extra_feats_xts = extra_feats_xts)
                             }, error = function(e){ 
-                              print(paste0("error with ticker: ", x, ", skipping..."))
+                              print(paste0("(f_fetch_all_tickers) --> error with ticker: ", x, ", returning null..."))
+                              return(NULL)
                               }
                             )
                               ,

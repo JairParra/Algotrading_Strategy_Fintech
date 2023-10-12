@@ -50,7 +50,8 @@ f_load_csv_from_zip <- function(zip_file_path) {
 
 
 f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
-  ## Functinon load and preprocess the raw data from the csv files under raw_data.zip
+  ## Functin to preprocess the raw data from the csv files under raw_data.zip
+  ## assumes these files are loaded beforehand 
   
   # load libraries
   require("here")

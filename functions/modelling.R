@@ -40,7 +40,7 @@ f_select_top_stocks <- function(sector_tracker, n=3){
   # Check if forecasted_ret > 0 for each element in the list
   positive_forecast <- sapply(best_stocks_data, function(x){
     x$forecasted_ret > 0 & x$forecasted_direction == "up"})
-  
+
   # Filter the list based on the condition
   best_stocks_data <- best_stocks_data[positive_forecast]
   
@@ -135,18 +135,19 @@ f_fit_models <- function(list_xts_sector,
         target_var = "realized_returns", # forecast future log returns
         volat_col = "volat", # always keep the actual volatility
         garch_col = "vol_forecast", 
-        nvmax = 35, # total number of max subsets
+        nvmax = 50, # total number of max subsets
         method="backward")
     }, 
     error = function(e){
-      warning(paste0("error with ticker ", ticker, ", returning NULL. #####", e))
+      print(paste0("error with ticker ", ticker, ", returning NULL. #####"))
+      print(head(ticker_data_train))
       return(NULL)
     }
     )
     
     # skip if ticker had some weir error but data is correct
     if(is.null(best_feat_list)){
-      warning(paste0("broken ticker ", ticker, "skipping"))
+      print(paste0("broken ticker ", ticker, " recycling..."))
       sector_tickers <- c(ticker, sector_tickers)
       next
     }
@@ -325,7 +326,16 @@ f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, model_type =
   
   # extract static train-val for all stocks 
   list_xts_sector <- lapply(sector_data, 
-                            f_extract_window, 
+                            function(x, tau, n_months){
+                              tryCatch({
+                                f_extract_window(x, tau = tau, n_months = n_months)
+                              }, 
+                              error = function(e){
+                                print(paste0("(f_MODELLING_PROCEDURE) --> faulty data: ", x))
+                                stop(e)
+                              }
+                              )
+                            }, 
                             tau=tau, # current run 
                             n_months = N_window# size of window 
   )

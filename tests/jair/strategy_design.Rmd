@@ -53,7 +53,6 @@ library(tidyquant)
 library(here)
 
 # Load code into environment 
-source(here("functions", "data_load.R"))
 source(here("functions", "fetch_sp500_sectors.R"))
 source(here("functions", "feature_engineering.R"))
 ```
@@ -110,16 +109,8 @@ This logic is implemented under **functions/fetch_sp500_sectors.R**
 ### 0.0.4 Retrieving top sectors and stocks 
 
 ```{r, message=FALSE}
-# function to fetch all the information for one ticker into a nice xts dataframe 
-sp500_stocks <- lapply(sector_list, 
-                       f_fetch_all_tickers, 
-                       start_date="2016-01-01",
-                       end_date="2022-12-01") 
-
-# clean the environment memory 
-xts_fama_french <- NULL 
-xts_financial_ratios <- NULL
-xts_realized_vol <- NULL 
+# Load preprocessed data from the data_clean directory 
+load(here("data_clean", "sp500_stocks.rda"))
 ```
 
 ```{r}
@@ -215,6 +206,8 @@ print(paste(rep("-", 100), collapse = ""))
 print("BACKTESTING")
 print(paste(rep("-", 100), collapse = ""))
 print("")
+
+verbose =TRUE
 
 # for every run (sliding window of time to consider)  
 for(tau in seq(N_runs)){
@@ -607,16 +600,15 @@ Next, we loop through every stock doing the following:
 ```{r, message=FALSE, warning=FALSE}
 library("glmnet")
 
-system.time(
   # Loop for every stock ticker in sector G 
   for(ticker in sector_tickers){
+    
     print(paste0("ticker: ", ticker))
     
-    ### Step 0: Data Preparation 
-    
     ###########################################################################
-    ### NOTE: Need to refactor 
-    
+      
+    ### Step 0: Data Preparation 
+  
     # fetch data for that ticker 
     full_train <- list_xts_sector[[ticker]]
     
@@ -635,38 +627,55 @@ system.time(
     # re-stack train and val for later
     full_train <- rbind.xts(ticker_data_train, ticker_data_val)
     
+    # modify train and val for the random forest classification 
+    ticker_data_train <- as.data.frame(ticker_data_train)
+    ticker_data_val <- as.data.frame(ticker_data_val) 
+
+    # convert column as factor for classification ("up", "down")
+    ticker_data_train$direction_lead <- factor(ticker_data_train$direction_lead, levels=c(1,-1), labels=c("up", "down"))
+    ticker_data_val$direction_lead <- factor(ticker_data_val$direction_lead, levels=c(1,-1), labels=c("up", "down"))
+
     ###########################################################################
     
     ### Step 1: Feature Selection 
-  
+    
     # Perform feature selection for that stock
-    best_feat_list <- f_select_features(
-                        fmla = fmla, # formula for regression
-                        data = ticker_data_train, # train data for one stock of current sector
-                        target_var = "realized_returns", # forecast future log returns
-                        volat_col = "volat", # always keep the actual volatility
-                        garch_col = "vol_forecast", 
-                        nvmax = 20, # total number of max subsets
-                        method="backward")
-  
-    print(best_feat_list$fmla)
+    best_feat_list <- tryCatch({
+      f_select_features(
+        fmla = fmla, # formula for regression
+        data = ticker_data_train, # train data for one stock of current sector
+        target_var = "realized_returns", # forecast future log returns
+        volat_col = "volat", # always keep the actual volatility
+        garch_col = "vol_forecast", 
+        nvmax = 35, # total number of max subsets
+        method="backward")
+    }, 
+    error = function(e){
+      warning(paste0("error with ticker ", ticker, ", returning NULL. #####", e))
+      return(NULL)
+    }
+    )
     
+    # skip if ticker had some weir error but data is correct
+    if(is.null(best_feat_list)){
+      warning(paste0("broken ticker ", ticker, "skipping"))
+      sector_tickers <- c(ticker, sector_tickers)
+      next
+    }
+    
+    if(verbose){
+      print(best_feat_list$fmla)
+    }
+    
+    ###########################################################################
+
     ### Step 2: Elasticnet 
-    
-    # # Set up time-slice cross-validation parameters
-    # ctr_train <- trainControl(method = "timeslice", # cross validation 
-    #                           initialWindow = 52,  # Consecutive number of weeks
-    #                           horizon = 4,         # Horizon is one month prediction (4 weeks)
-    #                           skip = 1,            # No skip, our data will overlap in practice
-    #                           fixedWindow = TRUE,   # Use a fixed window
-    #                           allowParallel = TRUE) # Enable parallel processing
     
     # Set up K-fold CV parameters
     ctr_train <- trainControl(method = "cv", # cross validation \
                               number = 10, # number of folds 
                               allowParallel = TRUE) # Enable parallel processing
     
-  
     # Train the elastic net regression model using time-slice cross-validation
     model_enet_best <- train(form = best_feat_list$fmla,            # Formula from feature selection
                              data = ticker_data_train,              # Training data 
@@ -688,16 +697,47 @@ system.time(
     
     # refit the model and assign test
     refitted_model <- glmnet(X_train, y_train, alpha = best_alpha, lambda = best_lambda, standardize = TRUE)
-  
+    
     # Use the best-fitted elastic net regression model to make predictions on the val_data
     pred_enet_best <- predict(refitted_model, newx = X_test, s = refitted_model$lambda, type = "response")
     pred_enet_best <- mean(pred_enet_best) # take the average
-  
+    
     # Compute the RMSE on the validation set 
     enet_rmse <- sqrt(mse(actual = ticker_data_val[, "realized_returns"], predicted = pred_enet_best))
     
+    
+    ###########################################################################
+    
+    ### Step 3: Random Forest 
+    
+    # Configure trainControl for time-based cross-validation
+    ctr_train <- trainControl(
+      method = "cv", # cross validation
+      number = 10, # number of folds 
+      classProbs = TRUE, # Include class probabilities
+      allowParallel = TRUE # Allow parallel processing if available
+    )
+    
+    # Train a random forest model for the current stock
+    model_rf <- train(
+      form = fmla_rf,              # Formula specifying the response and predictors
+      data = ticker_data_train,   # The training data
+      method = "ranger",           # The model algorithm to be used ("ranger" for random forest)
+      trControl = ctr_train,       # Control parameters for the train function
+      metric = "Kappa",            # Performance metric to be used for model tuning
+      tuneLength = 1               # Number of different hyperparameter settings to try
+    )
+    
+    # Forecast the direction lead with the model
+    direction_forecast <- predict(model_rf,
+                                  newdata = ticker_data_val,
+                                  type = "prob")
+    
 
-    ### Step 3: Sharpe Ratio 
+    # Extract only the forecast for next week (one week ahead) 
+    direction_forecast <- ifelse(mean(direction_forecast$up) > 0.5, "up", "down")
+    
+    ###########################################################################
     
     # Calculate the Sharpe Ratio and MSR (on historical discrete returns)
     scaling_factor <- as.vector(ticker_data_val$month_index)[1] - as.vector(ticker_data_train$month_index)[1]
@@ -706,19 +746,22 @@ system.time(
     hist_returns <- na.trim(as.vector(full_train[, "discrete_returns"]))
     mean_rets <- mean(hist_returns) 
     std_rets <- sd(hist_returns)
-  
+    
     # Calculate the ES and set risk-free 
     VaR <- quantile(hist_returns, 0.05) 
     ES <- mean(hist_returns[hist_returns < VaR])
     Rf <- 0.0002 # 0 
-                         
+    
     # Calculate the Sharpe and MSR
     stock_sharpe <- ((mean_rets- Rf)/ std_rets ) * sqrt(scaling_factor) # annualized
     stock_msr <- ((mean_rets- Rf)/ ES ) * sqrt(scaling_factor) # annualized
-  
+    
+    ###########################################################################
+    
     ### Step 4: Track the measures 
     
     sector_tracker[[ticker]]$forecasted_ret = pred_enet_best
+    sector_tracker[[ticker]]$forecasted_direction = direction_forecast
     sector_tracker[[ticker]]$rmse = enet_rmse
     sector_tracker[[ticker]]$sharpe = stock_sharpe
     sector_tracker[[ticker]]$msr = stock_msr
@@ -726,20 +769,22 @@ system.time(
                                                    "best_shifted_arima", 
                                                    "volat",
                                                    "vol_forecast",
-                                                   "month_index"
-                                                   )] # features to be kept
-
-    # show values
-    print("*****************************************")
-    print(paste("forecasted_ret: ", pred_enet_best))
-    print(paste("rmse: ", enet_rmse))
-    print(paste("sharpe: ", stock_sharpe))
-    print(paste("msr: ", stock_msr))
-    print("*****************************************")
+                                                   "month_index")] # features to be kept
     
-    print("##########################################")
+    # show values
+    if(verbose){
+      print("*****************************************")
+      print(paste("forecasted direction: ", direction_forecast))
+      print(paste("forecasted_ret: ", pred_enet_best))
+      print(paste("rmse: ", enet_rmse))
+      print(paste("sharpe: ", stock_sharpe))
+      print(paste("msr: ", stock_msr))
+      print("*****************************************")
+      
+      print("##########################################") 
+    }
   }
-)
+  )
 ```
 
 Now that all the models have been trained and the metrics recorded, we now simply choose the top 3 stocks based on the return, and the top 3 based on the best sharpe or modified sharpe ratio. 
@@ -762,6 +807,18 @@ best_sector_stocks <- f_select_top_stocks(sector_tracker, n=3)
 names(best_sector_stocks)
 best_sector_stocks[[1]]
 ```
+
+```{r}
+# Check if forecasted_ret > 0 for each element in the list
+positive_forecast <- sapply(best_stocks_data, function(x){
+  x$forecasted_ret > 0 & x$forecasted_direction == "up"})
+
+# Filter the list based on the condition
+best_stocks_data <- best_stocks_data[positive_forecast]
+```
+
+
+
 ```{r}
 # pack the data into a format for modelling (only keep the data)
 top_sector_stocks <- lapply(best_sector_stocks, function(x) x$data)
