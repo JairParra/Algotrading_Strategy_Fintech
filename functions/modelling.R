@@ -147,7 +147,7 @@ f_fit_models <- function(list_xts_sector,
     
     # skip if ticker had some weir error but data is correct
     if(is.null(best_feat_list)){
-      print(paste0("broken ticker ", ticker, " recycling..."))
+      print(paste0("broken ticker '", ticker, "' recycling..."))
       sector_tickers <- c(ticker, sector_tickers)
       next
     }

@@ -18,10 +18,11 @@ source(here("functions", "modelling.R")) # modelling procedure
 ### 1. Utils ###
 ################
 
-f_read_stock_price <- function(sp500_stocks_flat, ticker, date = NULL){
+f_read_stock_price <- function(ticker, sp500_stocks_flat, date = NULL){
   
   ## Retrieves the selected price of the ticker in question 
-  price <- as.numeric(sample_stock_close[index(sample_stock_close) == date])
+  price <- sp500_stocks_flat[[ticker]][index(sp500_stocks_flat[[ticker]]) == date]
+  price <- as.numeric(price$adjusted_close)
   
   return(price)
 }
@@ -30,7 +31,6 @@ f_read_stock_price <- function(sp500_stocks_flat, ticker, date = NULL){
 ###############################
 ### 2. Portfolio Management ###
 ###############################
-
 
 f_CLOSE_positions <- function(portfolio, tau){
   ## Closing the positions in the portfolio means: 
@@ -110,11 +110,7 @@ f_BACKTESTING_PROCEDURE <- function(sp500_stocks, N_window, N_runs, portfolio, v
       print("###############")
       print("CLOSE all positions") 
     }
-    
-    # only update portfolio after first run 
-    if(tau !- 1){
-      
-    }
+
     
     
   }

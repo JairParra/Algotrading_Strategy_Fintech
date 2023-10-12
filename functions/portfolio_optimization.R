@@ -1,6 +1,25 @@
+################################################################################
+# modeling.R
+#   This script contains the modelling logic employed in this simulation
+#
+# @author: Hair Parra
+# @author: Kriti
+################################################################################
 
+################
+### 0. Setup ###
+################
 
-### Functions to extract data frames ### 
+library("here")
+library("quantmod")
+library("PerformanceAnalytics")
+library("xts")
+library("Matrix")
+library("quadprog")
+
+#############################################
+### 1. Data Manipulation for Optimization ###
+#############################################
 
 # Extract the xts for the returns
 f_extract_ret_fore <- function(data, column_name) {
@@ -21,7 +40,9 @@ f_extract_vol_fore <- function(data, column_name) {
 }
 
 
-### Functions for Portfolio optimization ###
+###############################
+### 2. Mean and Covariance  ###
+############################### 
 
 f_cov_matrix <- function(volat_matrix, tau) {
   # Filter just the volatility for the period
@@ -36,3 +57,10 @@ f_mean_ret <- function(return_matrix, tau) {
   # Get the mean returns to be used for the portfolio optimization
   mean_filt_returns <- apply(return_matrix[return_matrix$month_index == tau, 1:(ncol(return_matrix) - 1)], 2, mean)
 }
+
+
+##################################
+### 3. Portfolio Optimization  ###
+##################################
+
+

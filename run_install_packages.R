@@ -35,6 +35,7 @@ proj_packages <- c(
   "caret", 
   "glmnet", 
   "Metrics", 
+  "quadprog",
   "quantmod", 
   "forecast", 
   "data.table", 

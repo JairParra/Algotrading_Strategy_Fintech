@@ -7,7 +7,7 @@ library("quadprog")
 
 # Example of input from main code that will be used for portfolio optimization 
 load("top_sector_stocks.rda")
-source(here("functions", "function_port_optim.R"))
+source(here("functions", "portfolio_optimization.R"))
 
 # Get the data frame for returns
 returns_fore <- f_extract_ret_fore(top_sector_stocks, "best_shifted_arima")

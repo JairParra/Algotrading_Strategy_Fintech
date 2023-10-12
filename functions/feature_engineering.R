@@ -653,11 +653,11 @@ f_select_features <- function(fmla,
   require("leaps")
   
   # Perform backward stepwise selection using 'regsubsets()' on the training data
-  regfit_bwd <- regsubsets(x = fmla, 
+  regfit_bwd <- suppressMessages(regsubsets(x = fmla, 
                            data = data, 
                            method = method, 
                            nvmax = nvmax # max size of subsets to examine
-  )
+  ))
   
   # Generate a summary of the fitted model
   reg_summary <- summary(regfit_bwd) 

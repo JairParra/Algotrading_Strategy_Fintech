@@ -26,6 +26,7 @@ library("here")
 source(here("functions", "fetch_sp500_sectors.R")) # functions for top stocks and economic sectors in the sp500
 source(here("functions", "feature_engineering.R")) # functions for feat eng and manipulation
 source(here("functions", "modelling.R")) # modelling procedure functions
+source(here("functions", "strategy.R")) # modelling procedure functions
 
 #######################
 ### 1. Data Loading ###
@@ -60,7 +61,8 @@ num_tickers <- length(sectors)*N_sector_best_stocks*2 # two sub-strategies for p
 initial_tickers <- rep(NA, num_tickers)
 weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
 returns <- rep(NA, N_runs) # returns for the portfolio across time 
-num_shares <- rep(NA, length(weights))
+rebalance_dates <- rep("", N_runs) # rebalance dates
+capital_history <- rep(NA, N_runs) # keeps track of the capital at every step 
 
 # repack the portfolio for tracking 
 # Note: 
@@ -68,7 +70,9 @@ num_shares <- rep(NA, length(weights))
 #       |-> ticker = list of (weight, num_shares) 
 portfolio <- list(assets = NA, 
                   capital = initial_capital, 
-                  returns = returns
+                  capital_history = capital_history, 
+                  returns = returns, # discrete
+                  dates = rebalance_dates
 )
 
 # display parameters
@@ -79,44 +83,72 @@ print(paste0("- slide: ", slide))
 print(paste0("- Initial Capital: ", initial_capital))
 
 
-###################################
-### X. MODELLING PROCEDURE TEST ###
-###################################
-
-# parameters 
-G <- names(sp500_stocks)[2] # sample sector 
-tau <- 10 # suppose we are in run 5 of the backtest 
-
-
-# system.time({
-#   # run simulation for one sector with verbose 
-#   best_sector_stocks <- f_MODELLING_PROCEDURE(G, tau, sp500_stocks, best_n = 6, verbose=TRUE)
-#   
-#   # pack the data into a format for modelling (only keep the data)
-#   top_sector_stocks <- lapply(best_sector_stocks, function(x)x$data) 
-# })
-
-# 
-# # save for kriti 
-# save(top_sector_stocks, file = here("tests", "jair", "top_sector_stocks.rda"))
-
-
 ############################
 ### X. BACKTESTING TEST  ###
 ############################
+
+# keep track of the investment dates 
+prev_long_date <- NULL
 
 # for every tau (run) in the backtesting
 system.time({
   for(tau in seq(N_runs)){
     # close any positions 
-    print("###############")
+    print("############################################")
     print(paste0("### (tau=", tau, ") ###"))
-    print("###############")
+    print("Portfolio: ") 
+    print(portfolio)
+    print("############################################")
+    
+    ##################################################################
+    ## 1. Close Positions 
+    
+    # get current date with the tau 
+    cur_date <- sp500_stocks_flat[[1]][sp500_stocks_flat[[1]]$month_index == tau + N_window - 1 + 1]
+    cur_date <- head(index(cur_date), 1)
+    
+    ##################################################################
+    ## 1. Close Positions 
     
     # close any positions 
-    print("CLOSE all positions")
+    print("1. CLOSE all positions")
     
+    # get current date with the tau and update in portfolio 
+    cur_date <- sp500_stocks_flat[[1]][sp500_stocks_flat[[1]]$month_index == tau + N_window]
+    cur_date <- as.character(head(index(cur_date), 1))
+    portfolio$dates[[tau]] <- cur_date
     
+    if(tau != 1){
+      
+      # extract tickers from portfolio 
+      portf_tickers <- portfolio$assets$tickers
+      
+      # retrieve current prices for assets in portfolio 
+      portf_prices <- sapply(portf_tickers, function(x){
+                              f_read_stock_price(x, sp500_stocks_flat, cur_date)
+                            })
+      
+      # close all positions at current price 
+      portfolio$capital <- sum(portfolio$assets$num_shares * portf_prices)
+      portfolio$capital_history[[tau]] <- portfolio$capital
+      
+      # Calculate the portfolio returns 
+      cur_capital = portfolio$capital
+      prev_capital = portfolio$capital_history[[tau-1]]
+      portfolio$returns[[tau]] = (cur_capital - prev_capital) / prev_capital
+      
+    }
+    else{
+      # no close in the first run 
+      portfolio$capital_history[1] = initial_capital
+      portfolio$returns[[tau]] = NA
+    }
+    
+    ##################################################################
+    ## 2. Modelling 
+    print("2. Modelling...")
+    
+    ## Define a wrapper that performs the SECTOR PROCEDURE to execute with lapply 
     f_apply_modelling <- function(G){
       # execute sector procedure 
       print(paste0("    SECTOR_PROCEDURE(G=", G, ", tau=",tau, ")"))
@@ -136,31 +168,62 @@ system.time({
     
     # transform obtained list into a usable format 
     top_run_stocks <-  do.call(c, top_stocks_all_sectors)
+    names(top_run_stocks) <- sub(".*\\.", "", names(top_run_stocks))
     
     # calculate number of assets
-    n <- length(names(top_sector_stocks))
+    n <- length(names(top_run_stocks))
 
     # extract the chosen tickers and create object for portfolio
-    assets <- list(tickers = names(top_sector_stocks),
+    assets <- list(tickers = names(top_run_stocks),
                    weight = rep(1/n, n), # equally weighted initially
                    num_shares = rep(0, n) # no shares initially
                   )
 
     # assign to portfolio
     portfolio$assets <- assets
-    print("Cur Portfolio:")
-    print(portfolio)
+    
+    ###################################################################
+    
+    ## 3. Portfolio Optimization 
     
     # Optimize portfolio weights using modified min_variance 
     print("")
     print("(3) OPTIMIZE_PORTFOLIO(portfolio)")
     
+    ## Retrieve the data for each of these 
+    
+    ###################################################################
+    
+    ## 4. Portfolio Rebalance
+    
+    # extract tickers from portfolio (once again, different portfolio)
+    portf_tickers <- portfolio$assets$tickers
+    
+    # calculate how much money to put per share 
+    weighted_capital <- portfolio$assets$weight * portfolio$capital 
+    names(weighted_capital) <- portf_tickers
+    
+    # retrieve current prices for assets in portfolio 
+    portf_prices <- sapply(portf_tickers, function(x){
+      f_read_stock_price(x, sp500_stocks_flat, cur_date)
+    })
+    
+    # calculate number of shares of the portfolio 
+    portfolio$assets$num_shares <- weighted_capital / portf_prices
+
+    #########################################################################
+    
+    print("Cur Portfolio:")
+    print(portfolio)
+    
     # long stocks in portfolio 
     print("")
     print("(4) LONG PORTFOLIO()")
     
+    #######################################################################
+    
     # TEST: Just for this small printing simulation !!
-    if(tau > 1){
+    if(tau > 2){
       break
     }
     print("-------------------------------------------------------------")
@@ -168,21 +231,7 @@ system.time({
 })
 
 
-# extract tickers from portfolio 
-portf_tickers <- portfolio$assets$tickers
-
-# retrieve current and previous timefor all tickers using tau 
-tail_times <- tail(index(top_run_stocks[[1]]),2)
-
-# retrieve current and previous adjusted price for a stock 
-last_two_prices <- as.matrix(sapply(portf_tickers, function(ticker){
-  # filter the matrix for the correct dates 
-  coredata(sp500_stocks_flat[[ticker]][tail_times]$adjusted_close)
-}))
-
-# Calculate the arithmetic returns
-returns <- (last_two_prices[2, ] - last_two_prices[1, ]) / last_two_prices[1, ]
-
-# Calculate the logarithmic returns
-log_returns <- log(last_two_prices[2, ] / last_two_prices[1, ])
-
+print("SUMMARY:") 
+print(portfolio$dates)
+print(portfolio$returns)
+print(portfolio$capital_history)
