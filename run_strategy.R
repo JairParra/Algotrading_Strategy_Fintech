@@ -27,6 +27,7 @@ source(here("functions", "fetch_sp500_sectors.R")) # functions for top stocks an
 source(here("functions", "feature_engineering.R")) # functions for feat eng and manipulation
 source(here("functions", "modelling.R")) # modelling procedure functions
 source(here("functions", "strategy.R")) # modelling procedure functions
+source(here("functions", "portfolio_optimization.R")) # functions for top stocks and economic sectors in the sp500
 
 #######################
 ### 1. Data Loading ###
@@ -191,6 +192,7 @@ system.time({
     print("(3) OPTIMIZE_PORTFOLIO(portfolio)")
     
     ## Retrieve the data for each of these 
+    optimal_minvar_weights <- f_optimize_portfolio(top_run_stocks)
     
     ###################################################################
     
