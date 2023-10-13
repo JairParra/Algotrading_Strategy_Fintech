@@ -139,8 +139,8 @@ f_fit_models <- function(list_xts_sector,
         method="backward")
     }, 
     error = function(e){
-      print(paste0("error with ticker ", ticker, ", returning NULL. #####"))
-      print(head(ticker_data_train))
+      print(paste0("(f_fit_models & f_select_features) --> error with ticker ", ticker, ", returning NULL..."))
+      # print(head(ticker_data_train))
       return(NULL)
     }
     )

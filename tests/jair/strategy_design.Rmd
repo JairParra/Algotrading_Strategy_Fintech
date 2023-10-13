@@ -228,7 +228,7 @@ for(tau in seq(N_runs)){
   
   # current portf 
   cur_tickers <- rep(NA, num_tickers)
-  
+  for
   print("")
   print("(2) PORTFOLIO_LOOP:")
   # loop through all the sectors 

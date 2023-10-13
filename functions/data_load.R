@@ -44,9 +44,9 @@ f_load_csv_from_zip <- function(zip_file_path) {
   return(paste(length(csv_files), "CSV files have been loaded into the environment."))
 }
 
-# # Example usage
-# library("here")
-# f_load_csv_from_zip(here("data", "raw_data.zip"))
+# Needed in the scope of all other functions 
+library("here")
+f_load_csv_from_zip(here("data", "raw_data.zip"))
 
 
 f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
@@ -55,9 +55,6 @@ f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
   
   # load libraries
   require("here")
-  
-  # load data 
-  f_load_csv_from_zip(here("data", "data.zip"))
   
   # Process data stocks 
   data_stocks$Date <- as.Date(data_stocks$Date, format = "%d-%m-%Y")
@@ -104,7 +101,11 @@ f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
   return(xts_extra_feats)
 }
 
-
+# data cleanup 
+data_stocks <- NULL
+data_realized_volatility <- NULL
+data_financial_ratios <- NULL
+data_fama_french <- NULL 
 
 
 

@@ -13,7 +13,6 @@
 library("here") 
 source(here("functions", "modelling.R")) # modelling procedure
 
-
 ################
 ### 1. Utils ###
 ################
@@ -92,27 +91,14 @@ f_SECTOR_PROCEDURE <- function(G, tau, sp500_stocks, max_top_pick, model_type = 
 
 f_BACKTESTING_PROCEDURE <- function(sp500_stocks, N_window, N_runs, portfolio, verbose){ 
   
+  ## TODO 
+  
   # Initiate backtesting 
   if(verbose){
     print(paste(rep("-", 100), collapse = ""))
     print("BACKTESTING")
     print(paste(rep("-", 100), collapse = ""))
     print("")
-  }
-  
-  # for every run (sliding window of time to consider)  
-  for(tau in seq(N_runs)){
-    
-    # close any positions 
-    if(verbose){
-      print("###############")
-      print(paste0("### (tau=", tau, ") ###"))
-      print("###############")
-      print("CLOSE all positions") 
-    }
-
-    
-    
   }
   
 }

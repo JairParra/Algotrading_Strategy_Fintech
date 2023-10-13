@@ -10,7 +10,6 @@
 ### 1. Data Manipulation for Optimization ###
 #############################################
 
-
 f_extract_ret_fore <- function(data, column_name = "best_shifted_arima") {
   ## Function to extract the xts object for forecasted returns from a list of xts objects
   
@@ -97,7 +96,9 @@ f_mean_ret <- function(return_matrix) {
 ### 3. Portfolio Optimization  ###
 ##################################
 
-f_optimize_portfolio <- function(top_sector_stocks){
+f_optimize_portfolio <- function(top_sector_stocks, min_alloc = 0.05){
+  ### Performs portfolio optimization based on the list of xts stocks top_sector_stocks
+  ## The min_alloc argument specified minimum portfolio allocation in the min-var portfolio 
   
   # Load required packages
   require("xts")
@@ -143,7 +144,7 @@ f_optimize_portfolio <- function(top_sector_stocks){
   output <- quadprog::solve.QP(Dmat = cov_matrix, # covariance matrix to be minimized
                                dvec = mean_returns, # minimum returns
                                Amat = cbind(matrix(rep(1,length(mean_returns)), ncol = 1), diag(length(mean_returns))),
-                               bvec = c(1, rep(0.05,length(mean_returns))), # sum of weights = 1 & no short selling
+                               bvec = c(1, rep(min_alloc,length(mean_returns))), # sum of weights = 1 & no short selling
                                meq = 1)
   # Weights allocated
   weights_mv <- output$solution

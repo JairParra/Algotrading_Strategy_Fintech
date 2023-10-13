@@ -235,7 +235,7 @@ f_fetch_ind_base <- function(ticker, from, to, extra_feats_xts){
 # fetches the xts data for all the stocks above at once 
 # and packs it into a list (or a list of lists if nested_list=TRUE,)
 f_fetch_all_tickers <- function(tickers, 
-                                start_date = "2016-01-01", 
+                                start_date = "2017-01-01", 
                                 end_date = "2022-12-31", 
                                 verbose = FALSE
                                 ){ 

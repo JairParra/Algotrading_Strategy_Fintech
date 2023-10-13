@@ -27,7 +27,7 @@ source(here("functions", "feature_engineering.R")) # functions for feat eng and 
 
 
 # load sp500 data into env
-sp500 <- f_load_sp500() # dSP500 components and weights from yahoo fiannce
+sp500 <- f_load_sp500() # dSP500 components and weights from yahoo finance
 sp500_sectors <- f_get_sp500_sectors() # economic sectors from wikipedia 
 
 # Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
@@ -37,11 +37,15 @@ sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_t
 system.time(
   sp500_stocks <- lapply(sector_list, 
                          f_fetch_all_tickers, 
-                         start_date="2018-01-01",
+                         start_date="2017-01-01", # backtesting
                          end_date="2022-12-01")  
 )
 
 # Clean the environment 
+data_stocks <- NULL
+data_realized_volatility <- NULL
+data_financial_ratios <- NULL
+data_fama_french <- NULL 
 xts_fama_french <- NULL 
 xts_financial_ratios <- NULL
 xts_realized_vol <- NULL

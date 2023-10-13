@@ -14,6 +14,13 @@
 # 2. No leverage 
 # 3. Fractional sell allowed for all shares 
 # 4. No transaction costs 
+# 
+# Notes: 
+#   - Every run tau symbolizes that we took the past 2 years of data, and 
+#     we run the strategy to rebalance our portfolio. 
+#   - Once rebalanced, we hold for one month.
+#   - At the next run (determined by tau), we calculate the P&L of portfolio performance
+#     and run the strategy again.
 ################################################################################
 
 ####################
@@ -26,7 +33,7 @@ library("here")
 source(here("functions", "fetch_sp500_sectors.R")) # functions for top stocks and economic sectors in the sp500
 source(here("functions", "feature_engineering.R")) # functions for feat eng and manipulation
 source(here("functions", "modelling.R")) # modelling procedure functions
-source(here("functions", "strategy.R")) # modelling procedure functions
+source(here("functions", "strategy.R")) # modelling general strategy 
 source(here("functions", "portfolio_optimization.R")) # functions for top stocks and economic sectors in the sp500
 
 #######################
@@ -36,7 +43,7 @@ source(here("functions", "portfolio_optimization.R")) # functions for top stocks
 # Load preprocessed data from the data_clean directory 
 load(here("data_clean", "sp500_stocks.rda"))
 
-# create flattened version for ease 
+# create flattened version for ease (delete middle nested list layer)
 sp500_stocks_flat <- sp500_stocks
 names(sp500_stocks_flat) <- NULL
 sp500_stocks_flat <- do.call(c, sp500_stocks_flat)
@@ -46,24 +53,24 @@ sp500_stocks_flat <- do.call(c, sp500_stocks_flat)
 ################################
 
 # Set up backtesting simulation parameters
-sample_xts <- sp500_stocks[[1]][[1]] # sample stock from data 
+sample_xts <- sp500_stocks_flat[[1]] # sample stock from data 
 sectors <- names(sp500_stocks)
-N_sector_best_stocks <- 3 # new strategy: max(3x2 = 6) 
+N_sector_max_best_stocks <- 6 # maximum number of stocks to choose, but never reached in practice
 
 # Formula parameters
 slide <- 1 # moving one month at the time
 N_months <- length(names(split.xts(sample_xts, f= "months"))) # total number of months 
-N_window <- 24 # number of months in size for each window 
+N_window <- 24 # number of months in size for each window (2 years)
 N_runs <- floor((N_months - N_window)/slide) # total number of runs/taus
 
 # setup initial portfolio tracking variables 
-initial_capital <- 500000
-num_tickers <- length(sectors)*N_sector_best_stocks*2 # two sub-strategies for picking
-initial_tickers <- rep(NA, num_tickers)
+initial_capital <- 500000 
+num_tickers <- length(sectors)*N_sector_max_best_stocks*2 # two sub-strategies for picking
 weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
 returns <- rep(NA, N_runs) # returns for the portfolio across time 
 rebalance_dates <- rep("", N_runs) # rebalance dates
 capital_history <- rep(NA, N_runs) # keeps track of the capital at every step 
+stop_loss <- initial_capital*0.25 # half of the capital lost 
 
 # repack the portfolio for tracking 
 # Note: 
@@ -79,30 +86,38 @@ portfolio <- list(assets = NA,
 # display parameters
 print(paste0("Running backtesting with the following parameters: "))
 print(paste0("- N_months: ", N_months))
-print(paste0("- N_runs: ", N_runs))
+print(paste0("- N_runs: ", N_runs)) 
 print(paste0("- slide: ", slide))
 print(paste0("- Initial Capital: ", initial_capital))
 
 
-############################
-### X. BACKTESTING TEST  ###
-############################
-
-# keep track of the investment dates 
-prev_long_date <- NULL
+#######################
+### 3. Backtesting  ###
+#######################
 
 # for every tau (run) in the backtesting
 system.time({
   for(tau in seq(N_runs)){
+    print("-------------------------------------------------------------")
+    
     # close any positions 
-    print("############################################")
+    print("###################################################################")
     print(paste0("### (tau=", tau, ") ###"))
-    print("Portfolio: ") 
+    print("###################################################################")
+    print("Portfolio (beginning run): ") 
     print(portfolio)
-    print("############################################")
+    print("###################################################################")
     
     ##################################################################
-    ## 1. Close Positions 
+    ## 0. Check stop loss 
+    
+    if(portfolio$capital < stop_loss){
+      print("Stop loss reached. Stopping trading...")
+      break 
+    }
+  
+    ##################################################################
+    ## 1. Obtain current positions
     
     # get current date with the tau 
     cur_date <- sp500_stocks_flat[[1]][sp500_stocks_flat[[1]]$month_index == tau + N_window - 1 + 1]
@@ -142,7 +157,7 @@ system.time({
     else{
       # no close in the first run 
       portfolio$capital_history[1] = initial_capital
-      portfolio$returns[[tau]] = NA
+      portfolio$returns[[tau]] = 0
     }
     
     ##################################################################
@@ -155,7 +170,9 @@ system.time({
       print(paste0("    SECTOR_PROCEDURE(G=", G, ", tau=",tau, ")"))
       
       # run simulation for one sector with verbose 
-      best_sector_stocks <- f_MODELLING_PROCEDURE(G, tau, sp500_stocks, best_n = 6, verbose=FALSE)
+      best_sector_stocks <- f_MODELLING_PROCEDURE(G, tau, sp500_stocks,
+                                                  best_n = N_sector_max_best_stocks, 
+                                                  verbose=FALSE)
       
       # pack the data into a format for modelling (only keep the data)
       top_sector_stocks <- lapply(best_sector_stocks, function(x)x$data) 
@@ -192,7 +209,8 @@ system.time({
     print("(3) OPTIMIZE_PORTFOLIO(portfolio)")
     
     ## Retrieve the data for each of these 
-    optimal_minvar_weights <- f_optimize_portfolio(top_run_stocks)
+    optimal_minvar_weights <- f_optimize_portfolio(top_run_stocks, min_alloc = 0.05)
+    portfolio$assets$weight <- optimal_minvar_weights
     
     ###################################################################
     
@@ -225,13 +243,12 @@ system.time({
     #######################################################################
     
     # TEST: Just for this small printing simulation !!
-    if(tau > 2){
+    if(tau > 4){
       break
     }
     print("-------------------------------------------------------------")
   }
 })
-
 
 print("SUMMARY:") 
 print(portfolio$dates)
