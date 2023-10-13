@@ -19,15 +19,6 @@ output:
 sansfont: Arial
 ---
 
-\newtheorem{assumption}{Assumption}[assumption]
-\newtheorem{theorem}{Theorem}
-\theoremstyle{definition}
-\newtheorem{definition}{Definition}
-\newtheorem{proposition}{Proposition}
-\newtheorem{example}{Example}
-\newtheorem{remark*}{Remark}
-\newtheorem{aside*}{Aside}
-\newtheorem{exercise*}{Exercise}
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -64,11 +55,15 @@ $$
 \right]
 $$
 
-![](outputs/capital_evolution.png){width=75%}
+![](outputs/capital_evolution.png){width=45%}\ 
+![](outputs/portfolio_performance.png){width=45%}
 
-![](outputs/portfolio_performance.png){width=75%}
 
-![](outputs/portfolio_drawdown.png){width=75%}
+<!-- ![](outputs/capital_evolution.png){width=50%} -->
+
+<!-- ![](outputs/portfolio_performance.png){width=50%} -->
+
+![](outputs/portfolio_drawdown.png){width=50%}
 
 # Machine Learning Components
 
@@ -85,10 +80,5 @@ $$
 \right]
 $$
 
-
 # Pros, Cons, and Comments
-
-
-
-
 

@@ -26,7 +26,7 @@
 #   Prev month: [tau + window - 1] -> long (take some positions)
 #   Cur month: [tau + window] -> close positions (P&L, etc) & rebalance 
 ################################################################################
-\
+
 
 ####################
 ### 0. Libraries ###

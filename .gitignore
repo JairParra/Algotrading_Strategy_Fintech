@@ -61,3 +61,7 @@ rsconnect/
 *-MSI*
 *~$w*
 *.tmp
+
+# Markdown
+*.out
+*.aux
