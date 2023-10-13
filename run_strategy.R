@@ -60,7 +60,7 @@ sp500_stocks_flat <- do.call(c, sp500_stocks_flat)
 # Set up backtesting simulation parameters
 sample_xts <- sp500_stocks_flat[[1]] # sample stock from data 
 sectors <- names(sp500_stocks)
-N_sector_max_best_stocks <- 6 # maximum number of stocks to choose, but never reached in practice
+N_sector_max_best_stocks <- 3 # maximum number of stocks to choose, but never reached in practice
 
 # Formula parameters
 slide <- 1 # moving one month at the time (monthly rebalancing)
@@ -75,6 +75,8 @@ weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
 returns <- rep(NA, N_runs) # returns for the portfolio across time 
 rebalance_dates <- rep("", N_runs) # rebalance dates
 capital_history <- rep(NA, N_runs) # keeps track of the capital at every step 
+sharpe_history <- rep(NA, N_runs) # keeps track of sharpe ratio 
+portf_history <- as.list(rep(NA, N_runs)) # keeps track of sharpe ratio 
 stop_loss <- initial_capital*0.25 # 1/4 of the initial capital lost 
 
 # repack the portfolio for tracking 
@@ -85,6 +87,9 @@ portfolio <- list(assets = NA,
                   capital = initial_capital, 
                   capital_history = capital_history, 
                   returns = returns, # discrete
+                  sharpe_history = sharpe_history,
+                  sharpe_history_rf = sharpe_history, # 0.04 rf
+                  portf_history = portf_history, 
                   dates = rebalance_dates
 )
 
@@ -94,6 +99,74 @@ print(paste0("- N_months: ", N_months))
 print(paste0("- N_runs: ", N_runs)) 
 print(paste0("- slide: ", slide))
 print(paste0("- Initial Capital: ", initial_capital))
+
+###############################
+### 4. Plots & Benchmarking ###
+###############################
+
+produce_plots <- function(portfolio){
+  
+  # pack the results into a dataframe 
+  portf_df <- as.data.frame(cbind(portfolio$dates,
+                                  portfolio$capital_history, 
+                                  portfolio$returns
+  ))
+  portf_df <- na.trim(portf_df)
+  colnames(portf_df) <- c("date", "capital", "discrete_returns")
+  
+  # convert to xts 
+  portf_xts <- as.xts(portf_df, order.by = as.Date(portf_df$date))
+  portf_xts$date <- NULL
+  
+  # add the log returns 
+  portf_xts$discrete_returns <- as.numeric(portf_xts$discrete_returns)
+  portf_xts$log_returns <- log(as.numeric(portf_xts$discrete_returns) + 1)
+  
+  # Download weekly prices of Apple spanning
+  SP500 <- getSymbols(Symbols = "^GSPC", # symbol
+                      src = "yahoo", # source: yahoo finance
+                      from = "2016-01-01",
+                      to = "2023-01-01",
+                      periodicity = "daily", 
+                      auto.assign = FALSE # prevents overwriting existing objects in env 
+  )
+  
+  # choose only valid dates  and assign to portfolio 
+  SP500 <- SP500[index(portf_xts)]
+  portf_xts$sp500_discrete_rets <- Return.calculate(prices = SP500[, 6], method = "discrete")
+  portf_xts$sp500_log_rets <- Return.calculate(prices = SP500[, 6], method = "log")
+  portf_xts <- na.fill(portf_xts, 0)
+  
+  # Visualize portfolio performance using PerformanceSummary chart
+  ret_cols <- c("discrete_returns", "log_returns", "sp500_discrete_rets", "sp500_log_rets")
+  charts.PerformanceSummary(R = portf_xts[, ret_cols],
+                            wealth.index = TRUE,
+                            main = "MLR-RF-Sharpe Min-Var Portfolio Performance")
+  
+  
+  # # Visualize Portfolio Drawdown
+  # chart.Drawdown(
+  #   R = portf_xts[, c(2,4)],
+  #   geometric = TRUE,
+  #   legend.loc = "topleft",
+  #   colorset = (1:12),
+  #   plot.engine = "default",
+  #   main = "MLR-RF-Sharpe Min-Var Portfolio Drawdown"
+  # )
+  # 
+  # # Visualize capital evolution through time
+  # plot(portf_xts$capital,
+  #      yaxis.right = FALSE,
+  #      legend.loc = "topleft", # legend on the top left of the chart
+  #      main = "Portfolio Capital Evolution",
+  #      xlab = "Date",
+  #      ylab = "Capital",
+  #      col = "blue",
+  #      major.ticks = "weeks",
+  #      grid.ticks.on = "weeks",
+  #      grid.ticks.lty = 2)
+  
+}
 
 
 #######################
@@ -145,8 +218,16 @@ system.time({
       prev_capital = portfolio$capital_history[[tau-1]]
       portfolio$returns[[tau]] = (cur_capital - prev_capital) / prev_capital
       
-    }
-    else{
+      # Compute the sharpe ratio of the portfolio so far 
+      avg_ret <- mean(na.trim(portfolio$returns))
+      sd_ret <- sd(na.trim(portfolio$returns))
+      rf = 0.04
+      
+      # assign sharpe 
+      portfolio$sharpe_history[[tau]] = avg_ret / sd_ret
+      portfolio$sharpe_history_rf[[tau]] = (avg_ret - rf) / sd_ret
+      
+    } else{
       # no close in the first run 
       portfolio$capital_history[1] = initial_capital
       portfolio$returns[[tau]] = 0
@@ -180,13 +261,27 @@ system.time({
       return(top_sector_stocks)
     }
     
-    # obtain top stocks for all sectors 
-    top_stocks_all_sectors <- lapply(sectors, f_apply_modelling)
-    names(top_stocks_all_sectors) <- sectors
+    tryCatch({
+      # obtain top stocks for all sectors 
+      top_stocks_all_sectors <- lapply(sectors, f_apply_modelling)
+      names(top_stocks_all_sectors) <- sectors
+      
+      # transform obtained list into a usable format 
+      top_run_stocks <-  compact(do.call(c, top_stocks_all_sectors))
+      names(top_run_stocks) <- sub(".*\\.", "", names(top_run_stocks))
+      
+      # assign chosen tickers to portfolio 
+      portfolio$assets$tickers <- names(top_run_stocks)
+    }, 
+    error = function(e){
+      print("WARNING: error with f_fit_models() inside MODELLING_PROCEDURE() --> random portfolio selected.")
     
-    # transform obtained list into a usable format 
-    top_run_stocks <-  do.call(c, top_stocks_all_sectors)
-    names(top_run_stocks) <- sub(".*\\.", "", names(top_run_stocks))
+      # assign chosen 15 randomly chosen tickers to portfolio 
+      portfolio$assets$tickers <- sample(names(sp500_stocks_flat), 15)
+    })
+    
+    # record portfolio histu selection
+    portfolio$portf_history[[tau]] <- portfolio$assets$tickers
     
     # calculate number of assets
     n <- length(names(top_run_stocks))
@@ -210,9 +305,10 @@ system.time({
     
     # perform optimization catching occassional errors 
     optimal_minvar_weights <- tryCatch({
-      f_optimize_portfolio(top_run_stocks, min_alloc = 0.05)
+      f_optimize_portfolio(top_run_stocks, min_alloc = 0.01)
     }, error = function(e){
       print("Error in portfolio optimization, default to equally weighted portfolio.")
+      print(e)
       return(NULL)
     })
     
@@ -221,7 +317,7 @@ system.time({
       portfolio$assets$weight <- optimal_minvar_weights
     }
     
-    # assign names to weights
+    # assign names to weights 
     names(portfolio$assets$weight) <- names(top_run_stocks)
 
     ###################################################################
@@ -237,11 +333,11 @@ system.time({
     })))
     
     # ensure only valid stocks are kept 
-    portf_tickers <- portf_tickers[names(portf_prices)]
+    portf_tickers <- intersect(portf_tickers, names(portf_prices))
     portfolio$assets$tickers <- portf_tickers
     
     # reweight weights accordingly 
-    portfolio$assets$weight <- portfolio$assets$weight[names(portf_prices)]
+    portfolio$assets$weight <- portfolio$assets$weight[portf_tickers]
     portfolio$assets$weight <- portfolio$assets$weight / sum(portfolio$assets$weight)
     
     # calculate how much money to put per share 
@@ -261,6 +357,8 @@ system.time({
     print("(4) LONG PORTFOLIO()")
     
     #######################################################################
+    
+    produce_plots(portfolio)
 
     print("-------------------------------------------------------------")
   }
@@ -272,67 +370,6 @@ print(portfolio$dates)
 print(portfolio$returns)
 print(portfolio$capital_history)
 
+# save portfolio as rda 
+save(portfolio, file = here("data_clean", "portfolio.rda"))
 
-###############################
-### 4. Plots & Benchmarking ###
-###############################
-
-# pack the results into a dataframe 
-portf_df <- as.data.frame(cbind(portfolio$dates,
-                                portfolio$capital_history, 
-                                portfolio$returns
-                                ))
-portf_df <- na.trim(portf_df)
-colnames(portf_df) <- c("date", "capital", "discrete_returns")
-
-# convert to xts 
-portf_xts <- as.xts(portf_df, order.by = as.Date(portf_df$date))
-portf_xts$date <- NULL
-
-# add the log returns 
-portf_xts$discrete_returns <- as.numeric(portf_xts$discrete_returns)
-portf_xts$log_returns <- log(as.numeric(portf_xts$discrete_returns) + 1)
-
-# Download weekly prices of Apple spanning
-SP500 <- getSymbols(Symbols = "^GSPC", # symbol
-                   src = "yahoo", # source: yahoo finance
-                   from = "2016-01-01",
-                   to = "2023-01-01",
-                   periodicity = "daily", 
-                   auto.assign = FALSE # prevents overwriting existing objects in env 
-)
-
-# choose only valid dates  and assign to portfolio 
-SP500 <- SP500[index(portf_xts)]
-portf_xts$sp500_discrete_rets <- Return.calculate(prices = SP500[, 6], method = "discrete")
-portf_xts$sp500_log_rets <- Return.calculate(prices = SP500[, 6], method = "log")
-portf_xts <- na.fill(portf_xts, 0)
-
-# Visualize portfolio performance using PerformanceSummary chart
-ret_cols <- c("discrete_returns", "log_returns", "sp500_discrete_rets", "sp500_log_rets")
-charts.PerformanceSummary(R = portf_xts[, ret_cols],
-                          wealth.index = TRUE,
-                          main = "MLR-RF-Sharpe Min-Var Portfolio Performance")
-
-
-# Visualize Portfolio Drawdown 
-chart.Drawdown(
-  R = portf_xts[, c(2,4)],
-  geometric = TRUE,
-  legend.loc = "topleft",
-  colorset = (1:12),
-  plot.engine = "default",
-  main = "MLR-RF-Sharpe Min-Var Portfolio Drawdown"
-)
-
-# Visualize capital evolution through time 
-plot(portf_xts$capital, 
-     yaxis.right = FALSE, 
-     legend.loc = "topleft", # legend on the top left of the chart
-     main = "Portfolio Capital Evolution",
-     xlab = "Date", 
-     ylab = "Capital", 
-     col = "blue", 
-     major.ticks = "weeks",
-     grid.ticks.on = "weeks",
-     grid.ticks.lty = 2)

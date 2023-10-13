@@ -30,23 +30,35 @@ f_select_top_stocks <- function(sector_tracker, n=3){
   # Extract the top n tickers with the highest Sharpe ratio and forecasted return
   top_sharpe <- names(sort(sapply(sector_tracker, function(x) x$sharpe), decreasing=TRUE))[1:n]
   top_fore_rets <- names(sort(sapply(sector_tracker, function(x) x$forecasted_ret), decreasing=TRUE))[1:n]
+  top_fore_dir <- names(sapply(sector_tracker, function(x) x[x$forecasted_direction == "up"]))[1:n]
   
-  # Filter stocks forecasted stocks with only positive performance 
+  # Filter stocks forecasted stocks with only positive performance
   
   # Concat in one list 
-  top_tickers  <- union(top_sharpe, top_fore_rets) 
+  top_tickers <- union(top_sharpe, top_fore_rets)
+  top_tickers <- union(top_tickers, top_fore_dir)
   
   # Create a new named list with tickers and their corresponding data
   best_stocks_data <- sector_tracker[top_tickers]
   
   # Check if forecasted_ret > 0 for each element in the list
   positive_forecast <- sapply(best_stocks_data, function(x){
-    x$forecasted_ret > 0 & x$forecasted_direction == "up"})
-
-  # Filter the list based on the condition
-  best_stocks_data <- best_stocks_data[positive_forecast]
+    (x$forecasted_ret > 0 & x$forecasted_direction == "up") || 
+    (x$sharpe > 0.5) || (x$sharpe > 0.3 & x$forecasted_direction == "up")
+      })
   
-  return(best_stocks_data)
+  # Filter the list based on the condition
+  chosen_stocks_data <- best_stocks_data[positive_forecast]
+  
+  # If not enough stocks chosen, choose everything 
+  if(length(names(chosen_stocks_data)) < 3){
+    chosen_stocks_data <- compact(sector_tracker[top_tickers])
+  }
+  
+  print("--> Chosen stocks for sector: ")
+  print(names(chosen_stocks_data))
+  
+  return(chosen_stocks_data)
 }
 
 
@@ -280,7 +292,7 @@ f_fit_models <- function(list_xts_sector,
 }
 
 
-f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, model_type = "elasticnet", verbose=FALSE){
+f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 6, model_type = "elasticnet", verbose=FALSE){
   ### This function does the following: 
   ##    - Extracts the appropriate window of data for all stocks in the sector 
   ##    - Computes dynamic features for all stocks in the sector 
@@ -366,13 +378,11 @@ f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, model_type =
     # Create a grid for elastic net regression hyperparameters
     grid_enet <- expand.grid(alpha = seq(from = 0, to = 1, by = 0.1),  # Elastic net mixing parameter
                              lambda = seq(from = 0, to = 0.05, by = 0.01))  # Regularization strength
-  }
-  else if(model_type == "lasso"){
+  }else if(model_type == "lasso"){
     # Create a grid for lassonet regression hyperparameters
     grid_enet <- expand.grid(alpha = 1,  # Lasso 
                              lambda = seq(from = 0, to = 0.05, by = 0.0005))  # Regularization strength
-  }
-  else{ 
+  }else{ 
     stop("Invalid method selected. Should be one of 'elasticnet' and 'lasso'.")
   }
   
@@ -411,7 +421,7 @@ f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, model_type =
   if(verbose) print("###### 4. Best Stocks ######")
   
   # Obtain the top picks with the function 
-  best_sector_stocks <- f_select_top_stocks(sector_tracker, n=3)
+  best_sector_stocks <- f_select_top_stocks(sector_tracker, n=best_n)
   if(verbose){
     print(best_sector_stocks)
   }

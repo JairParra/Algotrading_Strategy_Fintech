@@ -29,22 +29,6 @@ f_read_stock_price <- function(ticker, sp500_stocks_flat, date = NULL){
   }
   return(price)
 }
-################################
-### 3. BACKTESTING PROCEDURE ###
-################################
 
-f_BACKTESTING_PROCEDURE <- function(sp500_stocks, N_window, N_runs, portfolio, verbose){ 
-  
-  ## TODO 
-  
-  # Initiate backtesting 
-  if(verbose){
-    print(paste(rep("-", 100), collapse = ""))
-    print("BACKTESTING")
-    print(paste(rep("-", 100), collapse = ""))
-    print("")
-  }
-  
-}
 
 
