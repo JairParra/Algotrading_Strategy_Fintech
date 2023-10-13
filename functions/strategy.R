@@ -31,4 +31,14 @@ f_read_stock_price <- function(ticker, sp500_stocks_flat, date = NULL){
 }
 
 
+# Function to calculate geometric mean of returns
+f_geometric_mean_returns <- function(returns) {
+  n <- length(returns)  # Number of returns
+  product <- prod(1 + returns)  # Product of (1 + each return)
+  
+  # Calculate geometric mean
+  geom_mean <- (product)^(1 / n) - 1
+  
+  return(geom_mean)
+}
 

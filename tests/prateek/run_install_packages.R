@@ -1,7 +1,0 @@
-install.packages("quantmod")
-install.packages("PerformanceAnalytics")
-install.packages("data.table")
-install.packages("here")
-install.packages("TTR")
-install.packages("zoo")
-install.packages("xts")

@@ -1,0 +1,143 @@
+---
+title: "Untitled"
+author: "Hair Albeiro Parra Barrera"
+date: "2023-10-13"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#####################################
+### 0. Libraries and Source files ###
+#####################################
+
+# load required scripts
+library("here") 
+source(here("functions", "data_load.R")) # raw data reading + minimal preprocessing
+source(here("functions", "fetch_sp500_sectors.R")) # functions for top stocks and economic sectors in the sp500
+source(here("functions", "feature_engineering.R")) # functions for feat eng and manipulation
+```
+
+
+```{r}
+# load sp500 data into env
+sp500 <- f_load_sp500() # dSP500 components and weights from yahoo finance
+sp500
+```
+
+```{r}
+sp500_sectors <- f_get_sp500_sectors() # economic sectors from wikipedia 
+sp500_sectors
+```
+
+```{r}
+# Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
+sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_tickers=TRUE)
+sector_list
+```
+```{r}
+# function to get all the weigths from a list of tickers 
+weights <- lapply(sector_list$Industrials, function(x){(sp500 %>% filter(symbol == x))$weight})
+names(weights) <- sector_list$Industrials
+
+# retrieve weights for all sectors 
+sector_weights <- lapply(sector_list, function(sector){
+  lapply(sector, function(x){
+    weights <- (sp500 %>% filter(symbol == x))$weight
+    names(weights) <- names(x)
+    return(weights)
+    })
+})
+
+# Initialize an empty list to store the new structure
+new_weights_list <- list()
+
+# Iterate over each sector
+for(sector in names(sector_list)) {
+  
+  # Initialize an empty named vector for this sector
+  named_vector <- vector("numeric", length(sector_list[[sector]]))
+  
+  # Assign names to the elements of this vector based on stock symbols
+  names(named_vector) <- sector_list[[sector]]
+  
+  # Assign corresponding weight values from the original list
+  for(i in seq_along(named_vector)) {
+    named_vector[i] <- sector_weights[[sector]][[i]]
+  }
+  
+  # Add this named vector to the new list under the same sector name
+  new_weights_list[[sector]] <- named_vector
+}
+
+# Show the new list structure
+print(new_weights_list)
+```
+```{r}
+# Initialize empty vectors to hold the data
+tickers <- c()
+sectors <- c()
+weights <- c()
+
+# Loop through the list and populate the vectors
+for (sector in names(new_weights_list)) {
+  sector_data <- new_weights_list[[sector]]
+  tickers <- c(tickers, names(sector_data))
+  sectors <- c(sectors, rep(sector, length(sector_data)))
+  weights <- c(weights, as.numeric(sector_data))
+}
+
+# Create the dataframe and call it sp500_sub_df
+sp500_sub_df <- data.frame(ticker = tickers, sector = sectors, weight = weights * 100)  # multiply by 100 to convert to percentages
+
+# Display the dataframe
+print(sp500_sub_df)
+```
+
+```{r, fig.height=10, fig.width=7}
+# Load ggplot2 package
+library(ggplot2)
+
+# Plot barchart of weight distribution by ticker, now with a gradient of blue colors
+ggplot(sp500_sub_df, aes(x = reorder(ticker, weight), y = weight, fill = weight)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = sprintf("%.2f%%", weight)), vjust = -0.5, colour = "black") +  # Text in grey color
+  coord_flip() + 
+  labs(title = "Weight Distribution by Ticker",
+       x = "Ticker",
+       y = "Weight (%)") +
+  scale_y_continuous(labels = scales::percent_format(scale = 100)) +
+  scale_fill_gradient(low = "lightblue", high = "blue") +  # Gradient from light blue to dark blue
+  guides(fill = FALSE)  # Remove the legend for individual colors
+
+```
+
+```{r}
+# Aggregate by sector
+sp500_sub_sectors_df <- aggregate(weight ~ sector, data = sp500_sub_df, sum)
+
+# Plot barchart with a gradient of blue colors and text labels for each bar
+ggplot(sp500_sub_sectors_df, aes(x = reorder(sector, weight), y = weight, fill = weight)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = sprintf("%.2f%%", weight)), vjust = -0.5) +
+  coord_flip() +
+  labs(title = "Top SP500 Subset Weight Distribution for Selected Sectors",
+       x = "Sector",
+       y = "Weight (%)") +
+  scale_y_continuous(labels = scales::percent_format(scale = 1)) +
+  scale_fill_gradient(low = "lightblue", high = "blue") +  # Gradient from light blue to dark blue
+  guides(fill = FALSE)  # Remove the legend for individual colors
+```
+```{r}
+N_runs <- 72
+portf_history <- as.list(rep(NA, N_runs))
+portf_history
+```
+
+
+
+

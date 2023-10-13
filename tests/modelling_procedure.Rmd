@@ -1,0 +1,480 @@
+---
+header-includes:
+  - \usepackage{amsmath}
+  - \usepackage{amssymb}
+  - \usepackage{amsthm}
+  - \usepackage{fancyhdr}
+  - \pagestyle{fancy}
+  - \fancyhead[CO,CE]{Hair Parra}
+  - \fancyfoot[CO,CE]{Notes by Hair Parra}
+  - \fancyfoot[LE,RO]{\thepage}
+title: "Modelling Procedure (ML Fin Data - Project 1)"
+author: "Hair Albeiro Parra Barrera"
+geometry: margin=1.3cm
+always_allow_html: true
+output: 
+    pdf_document: 
+      extra_dependencies: ["array", "amsmath","booktabs"]
+---
+
+\newtheorem{assumption}{Assumption}[assumption]
+\newtheorem{theorem}{Theorem}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\newtheorem{proposition}{Proposition}
+\newtheorem{example}{Example}
+\newtheorem{remark*}{Remark}
+\newtheorem{aside*}{Aside}
+\newtheorem{exercise*}{Exercise}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(fig.width=9, fig.height=6) 
+
+# configurations for plot 
+my_plot_hook <- function(x, options)
+  paste("\n", knitr::hook_plot_tex(x, options), "\n")
+knitr::knit_hooks$set(plot = my_plot_hook)
+```
+
+## Libraries 
+
+```{r, echo=FALSE, message=FALSE}
+# Load the required packages
+library(TTR) 
+library(here)
+library(rvest)
+library(dplyr)
+library(quantmod)
+library(tidyverse)
+library(tidyquant)
+
+# Load code into environment 
+source(here("functions", "data_load.R"))
+source(here("functions", "fetch_sp500_sectors.R"))
+source(here("functions", "feature_engineering.R"))
+```
+
+# Getting the data
+
+### 0.0.1 SP500 Economic Sectors
+
+The following function fetches and extract the economic sectors from the SP500, taken from [Wikipedia](https://en.wikipedia.org/wiki/List_of_S%26P_500_companies). 
+
+
+```{r, message=FALSE}
+# NOTE: not necessary to run anymore
+# fetch the sectors as a dataframe 
+sp500 <- f_load_sp500()
+sp500_sectors <- f_get_sp500_sectors()
+```
+
+## Retrieving top sectors and stocks 
+
+The following function will retrieve the top sectors and stocks from the SP500 by weight. 
+
+```{r, message=FALSE, warning=FALSE}
+# Retrieve top 10 stocks by weight for each sector in the top 5 sectors from the SP500 (by weight)
+sector_list <- f_retrieve_top_sp500(top_n_sectors = 6, top_n_stocks = 15, only_tickers=TRUE)
+sector_list
+```
+
+### Retrieving stock data
+
+We will know use the function `f_fetch_all_tickers` under `functions/fetch_sp500_sectors.R`
+
+```{r, message=FALSE}
+# function to fetch all the information for one ticker into a nice xts dataframe 
+sp500_stocks <- lapply(sector_list, 
+                       f_fetch_all_tickers, 
+                       start_date="2016-01-01",
+                       end_date="2022-12-01") 
+
+# clean the environment memory 
+xts_fama_french <- NULL 
+xts_financial_ratios <- NULL
+xts_realized_vol <- NULL 
+```
+
+
+
+
+The result of this function is a list of lists, with elements as below. 
+
+```{r}
+# Show the available sectors 
+names(sp500_stocks)
+```
+
+```{r}
+# Show available stocks for Industrials 
+names(sp500_stocks$Industrials)
+```
+
+```{r}
+# access the xts of the stocks in industrials 
+tail(sp500_stocks$Industrials[[1]])
+```
+# BACKTESTING parameters 
+
+The following code is used in the `strategy_design.rmd` markdown to simulate the backtesting.
+You can ignore most of the code here, but some variables are necessary. 
+
+```{r}
+# Set up backtesting simulation parameters
+sample_xts <- sp500_stocks$Industrials$ADP
+sectors <- names(sp500_stocks) 
+N_sector_best_stocks <- 3 # new strategy: 3x2 = 6 
+
+# Formula parameters
+slide <- 1 
+N_months <- length(names(split.xts(sample_xts, f= "months")))
+N_window <- 18 # number of months in size for each window 
+N_runs <- floor((N_months - N_window)/slide)
+
+# display parameters
+print(paste0("N_months: ", N_months))
+print(paste0("N_runs: ", N_runs))
+print(paste0("slide: ", slide))
+
+# setup initial portfolio tracking variables 
+initial_capital <- 500000
+num_tickers <- length(sectors)*N_sector_best_stocks*2 # two sub-strategies for picking
+initial_tickers <- rep(NA, num_tickers)
+weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
+returns <- rep(NA, N_runs)
+
+# repack the portfolio 
+portfolio <- list(tickers = initial_tickers, 
+                  weights = weights, 
+                  capital = initial_capital, 
+                  returns = returns, 
+                  data = NA
+                  )
+portfolio
+```
+
+
+# MODELLING_PROCEDURE 
+
+Recall that the **SECTOR_PROCEDURE**$(G,\tau)$ function takes the argument $G$, which is the **sector name**, and **tau**, which is the current run in the backtesting. 
+
+This procedure happens in a loop, for every sector $G$. Here, we fix one sector only, and a specific $\tau$. The code does the following: 
+
+1. Retrieves the actual sector stock data (list of key-value pairs, keys are stock tickers, values are xts full data for that stock.)
+2. Creates a variable to store the subset of data that goes into the current window. 
+3. The `f_extract_window()` function extracts the appropriate window of data corresponding to the $\tau$, with the appropriate window size, for all sectors.
+4. Extracts the dynamic features (ARIMA and GARCH) for that each stock in the sector. 
+
+```{r}
+# parameters 
+G <- names(sp500_stocks)[2] # sample sector 
+tau <- 10 # suppose we are in run 5 of the backtest 
+
+####### Inside SECTOR_PROCEDURE ######## 
+
+# retrieve sector data 
+sector_data <- sp500_stocks[[G]]
+
+# stocks for sector provided 
+sector_tickers <- names(sector_data)
+
+# to store subset features for window 
+sector_stocks_window <- rep(NA, length(sector_tickers)) 
+names(sector_stocks_window) <- sector_tickers
+
+# extract static train-val for all stocks 
+list_xts_sector <- lapply(sector_data, 
+                          f_extract_window, 
+                          tau=tau, # current run 
+                          n_months = N_window# size of window 
+)
+
+# compute dynamic features for all stocks
+list_xts_sector <- lapply(list_xts_sector, 
+                          suppressWarnings(f_extract_dynamic_features), 
+                          arima_col = "realized_returns", 
+                          volat_col = "volat"
+)
+
+
+# list of tickers may be smaller 
+sector_tickers <- names(sector_data)
+
+####### Inside SECTOR_PROCEDURE ########
+
+# keys are stock tickers for that sector 
+names(list_xts_sector)
+
+# each stock has the xts subset (for window)
+tail(list_xts_sectors[[1]])
+```
+
+
+The result is the `list_train_val_sector` oject, which is a list of lists. 
+- The first level are the stock tickers
+- The second level are train and val xts for each stock. 
+
+
+### Feature Selection 
+
+Notes: 
+- This will use **forward selection** to extract the features from a sample stock for the current sector. 
+- The `target_var` argument specifies the target variable, in this case is called "realized_returns". 
+- `f_select_features()` is found under `functions/feature_engineering.R`
+
+```{r}
+# Extract a sample stock in the list_xts_sectors
+sample_sector_stock <- list_xts_sector[[1]]
+
+# Define the formula for regression
+fmla <- realized_returns ~ . -realized_returns -month_index
+
+# try obtaining best features for a sample train set for a stock in the sample sector 
+best_feat_list <- f_select_features(
+                    fmla = fmla, # formula for regression 
+                    data = sample_sector_stock, # for one stock of current sector  
+                    target_var = "realized_returns", # future-lagged log-returns
+                    volat_col = "volat", # we always want to keep the volatility col
+                    garch_col = "vol_forecast", # GARCH column
+                    nvmax = 25, # maximum number of subsets to examine 
+                    method="backward") #  we always want to use forward selection
+print("")
+best_feat_list
+```
+
+
+### Regularized MLR (Elasticnet) 
+
+$$
+\mathcal{L}(\beta) 
+= 
+\dfrac{1}{2}
+\sum_{i=1}^{n}(y_i - x_{i}^T\beta)^{2}
++ 
+\lambda\left[
+  \alpha ||\beta||_1 
+  + (1-\alpha)||\beta||_{2}^{2}
+\right]
+$$
+
+
+
+```{r, message=FALSE}
+# load required libraries 
+library("caret")
+library("Metrics")
+
+# Define the formula for regression
+fmla <- realized_returns ~ . -realized_returns -month_index
+
+# Create a grid for elastic net regression hyperparameters
+grid_enet <- expand.grid(alpha = seq(from = 0, to = 1, by = 0.1),  # Elastic net mixing parameter
+                         lambda = seq(from = 0, to = 0.05, by = 0.01))  # Regularization strength
+
+# Initialize variable to save forecasted returns, MSEs and Sharpe Ratios 
+sector_tracker <- as.list(rep(NA, length(sector_tickers)))
+names(sector_tracker) <- sector_tickers
+
+# transform into a list of lists 
+sector_tracker <- lapply(sector_tracker, function(x) list(
+  forecasted_ret = NA,
+  sharpe = NA,
+  msr = NA, # modified sharpe ratio
+  rmse = NA,
+  data = NA
+))
+
+# display values 
+fmla # all initial variables 
+names(sector_tracker) # list of lists 
+names(sector_tracker[[1]]) # to store the values as the loop happens
+```
+
+## Fitting all the models 
+
+Next, we loop through every stock doing the following: 
+1. Extracting the train and validation sets, and filter NAs
+2. Perform feature selection for every stock 
+3. Fit an Elasticnet model for that stock, and obtain predictions for the returns
+4. Compute the RMSE
+5. Compute the Sharpe Ratio and Modified Sharpe 
+6. Save everything
+
+```{r, message=FALSE, warning=FALSE}
+library("glmnet")
+
+system.time(
+  # Loop for every stock ticker in sector G 
+  for(ticker in sector_tickers){
+    print(paste0("ticker: ", ticker))
+    
+    ### Step 0: Data Preparation 
+  
+    # fetch data for that ticker 
+    full_train <- list_xts_sector[[ticker]]
+    
+    # Re-extract train and val with full features 
+    full_train <- f_extract_train_val_no_window(full_train, 
+                                                val_lag = 1) # number of months in val 
+    
+    # Reassign to train and val 
+    ticker_data_train <- full_train$train
+    ticker_data_val <- full_train$val
+    
+    # remove nas 
+    ticker_data_train <- na.omit(ticker_data_train) # data cannot contain nas 
+    ticker_data_val <- na.omit(ticker_data_val) # data cannot contain nas 
+    
+    # re-stack train and val for later
+    full_train <- rbind.xts(ticker_data_train, ticker_data_val)
+    
+    ###########################################################################
+    
+    ### Step 1: Feature Selection 
+  
+    # Perform feature selection for that stock
+    best_feat_list <- tryCatch({
+          f_select_features(
+                        fmla = fmla, # formula for regression
+                        data = ticker_data_train, # train data for one stock of current sector
+                        target_var = "realized_returns", # forecast future log returns
+                        volat_col = "volat", # always keep the actual volatility
+                        garch_col = "vol_forecast", 
+                        nvmax = 20, # total number of max subsets
+                        method="backward")
+    }, 
+    error = function(e){
+      warning(paste0("error with ticker ", ticker))
+      return(NULL)
+    }
+    )
+    
+    # skip if ticker had some weir error but data is correct
+    if(is.null(best_feat_list)){
+      warning(paste0("broken ticker ", ticker, "skipping"))
+      sector_tickers <- c(ticker, sector_tickers)
+      next
+    }
+  
+    print(best_feat_list$fmla)
+    
+    ### Step 2: Elasticnet 
+    
+    # # Set up time-slice cross-validation parameters
+    # ctr_train <- trainControl(method = "timeslice", # cross validation 
+    #                           initialWindow = 52,  # Consecutive number of weeks
+    #                           horizon = 4,         # Horizon is one month prediction (4 weeks)
+    #                           skip = 1,            # No skip, our data will overlap in practice
+    #                           fixedWindow = TRUE,   # Use a fixed window
+    #                           allowParallel = TRUE) # Enable parallel processing
+    
+    # Set up K-fold CV parameters
+    ctr_train <- trainControl(method = "cv", # cross validation \
+                              number = 10, # number of folds 
+                              allowParallel = TRUE) # Enable parallel processing
+    
+  
+    # Train the elastic net regression model using time-slice cross-validation
+    model_enet_best <- train(form = best_feat_list$fmla,            # Formula from feature selection
+                             data = ticker_data_train,              # Training data 
+                             method = "glmnet",                     # Model method = Elasticnet
+                             tuneGrid = grid_enet,                  # Hyperparameter grid
+                             trControl = ctr_train,                 # Cross-validation control
+                             preProc = c("center", "scale"),        # Preprocessing steps
+                             metric = "Rsquared",                   # Metric for selecting the best model
+                             threshold = 0.2)
+    
+    # Extract the best alpha and beta fitted
+    best_alpha <- model_enet_best$bestTune$alpha
+    best_lambda <- model_enet_best$bestTune$lambda
+    
+    # Subset features and targets for retraining
+    X_train <- model.matrix(best_feat_list$fmla, data = ticker_data_train)
+    X_test <- model.matrix(best_feat_list$fmla, data = ticker_data_val)
+    y_train <- ticker_data_train[, "realized_returns"]
+    
+    # refit the model and assign test
+    refitted_model <- glmnet(X_train, y_train, alpha = best_alpha, lambda = best_lambda, standardize = TRUE)
+  
+    # Use the best-fitted elastic net regression model to make predictions on the val_data
+    pred_enet_best <- predict(refitted_model, newx = X_test, s = refitted_model$lambda, type = "response")
+    pred_enet_best <- mean(pred_enet_best) # take the average
+  
+    # Compute the RMSE on the validation set 
+    enet_rmse <- sqrt(mse(actual = ticker_data_val[, "realized_returns"], predicted = pred_enet_best))
+    
+
+    ### Step 3: Sharpe Ratio 
+    
+    # Calculate the Sharpe Ratio and MSR (on historical discrete returns)
+    scaling_factor <- as.vector(ticker_data_val$month_index)[1] - as.vector(ticker_data_train$month_index)[1]
+    
+    # Pack returns and compute mean and std
+    hist_returns <- na.trim(as.vector(full_train[, "discrete_returns"]))
+    mean_rets <- mean(hist_returns) 
+    std_rets <- sd(hist_returns)
+  
+    # Calculate the ES and set risk-free 
+    VaR <- quantile(hist_returns, 0.05) 
+    ES <- mean(hist_returns[hist_returns < VaR])
+    Rf <- 0.0002 # 0 
+                         
+    # Calculate the Sharpe and MSR
+    stock_sharpe <- ((mean_rets- Rf)/ std_rets ) * sqrt(scaling_factor) # annualized
+    stock_msr <- ((mean_rets- Rf)/ ES ) * sqrt(scaling_factor) # annualized
+  
+    ### Step 4: Track the measures 
+    
+    sector_tracker[[ticker]]$forecasted_ret = pred_enet_best
+    sector_tracker[[ticker]]$rmse = enet_rmse
+    sector_tracker[[ticker]]$sharpe = stock_sharpe
+    sector_tracker[[ticker]]$msr = stock_msr
+    sector_tracker[[ticker]]$data = full_train[, c("realized_returns",
+                                                   "best_shifted_arima", 
+                                                   "volat",
+                                                   "vol_forecast")] # features to be kept
+
+    # show values
+    print("*****************************************")
+    print(paste("forecasted_ret: ", pred_enet_best))
+    print(paste("rmse: ", enet_rmse))
+    print(paste("sharpe: ", stock_sharpe))
+    print(paste("msr: ", stock_msr))
+    print("*****************************************")
+    
+    print("##########################################")
+  }
+)
+```
+
+Now that all the models have been trained and the metrics recorded, we now simply choose the top 3 stocks based on the return, and the top 3 based on the best sharpe or modified sharpe ratio. 
+
+Let's first show some values for the `sector_tracker` object: 
+
+```{r}
+names(sector_tracker) 
+```
+
+```{r}
+names(sector_tracker[[1]])
+```
+
+```{r}
+source(here("functions","modelling.R"))
+
+# Obtain the top picks with the function 
+best_sector_stocks <- f_select_top_stocks(sector_tracker, n=3)
+names(best_sector_stocks)
+best_sector_stocks
+```
+```{r}
+# pack the data into a format for modelling (only keep the data)
+top_sector_stocks <- lapply(best_sector_stocks, function(x) x$data)
+top_sector_stocks[[1]]
+```
+
+```{r}
+save(top_sector_stocks, file = here("tests","jair", "top_sector_stocks.rda"))
+```
+
