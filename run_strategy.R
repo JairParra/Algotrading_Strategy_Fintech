@@ -26,6 +26,7 @@
 #   Prev month: [tau + window - 1] -> long (take some positions)
 #   Cur month: [tau + window] -> close positions (P&L, etc) & rebalance 
 ################################################################################
+\
 
 ####################
 ### 0. Libraries ###
@@ -102,6 +103,7 @@ print(paste0("- Initial Capital: ", initial_capital))
 # for every tau (run) in the backtesting
 system.time({
   for(tau in seq(N_runs)){
+  # for(tau in seq(tau+1, N_runs)){
     print("-------------------------------------------------------------")
     
     # close any positions 
@@ -112,20 +114,6 @@ system.time({
     print(portfolio)
     print("###################################################################")
     
-    ##################################################################
-    ## 0. Check stop loss 
-    
-    if(portfolio$capital < stop_loss){
-      print("Stop loss reached. Stopping trading...")
-      break 
-    }
-  
-    # ##################################################################
-    # ## 1. Obtain current date
-    # 
-    # # get current date with the tau 
-    # cur_date <- sp500_stocks_flat[[1]][sp500_stocks_flat[[1]]$month_index == tau + N_window - 1 + 1]
-    # cur_date <- head(index(cur_date), 1)
     
     ##################################################################
     ## 1. Close Positions 
@@ -144,9 +132,9 @@ system.time({
       portf_tickers <- portfolio$assets$tickers
       
       # retrieve current prices for assets in portfolio 
-      portf_prices <- sapply(portf_tickers, function(x){
+      portf_prices <- unlist(compact(sapply(portf_tickers, function(x){
                               f_read_stock_price(x, sp500_stocks_flat, cur_date)
-                            })
+                            })))
       
       # close all positions at current price 
       portfolio$capital <- sum(portfolio$assets$num_shares * portf_prices)
@@ -162,6 +150,14 @@ system.time({
       # no close in the first run 
       portfolio$capital_history[1] = initial_capital
       portfolio$returns[[tau]] = 0
+    }
+    
+    ##################################################################
+    ## 0. Check stop loss 
+    
+    if(portfolio$capital < stop_loss){
+      print("Stop loss reached. Stopping trading...")
+      break 
     }
     
     ##################################################################
@@ -212,10 +208,22 @@ system.time({
     print("")
     print("(3) OPTIMIZE_PORTFOLIO(portfolio)")
     
-    ## Retrieve the data for each of these 
-    optimal_minvar_weights <- f_optimize_portfolio(top_run_stocks, min_alloc = 0.05)
-    portfolio$assets$weight <- optimal_minvar_weights
+    # perform optimization catching occassional errors 
+    optimal_minvar_weights <- tryCatch({
+      f_optimize_portfolio(top_run_stocks, min_alloc = 0.05)
+    }, error = function(e){
+      print("Error in portfolio optimization, default to equally weighted portfolio.")
+      return(NULL)
+    })
     
+    # assign weights
+    if(!is.null(optimal_minvar_weights)){
+      portfolio$assets$weight <- optimal_minvar_weights
+    }
+    
+    # assign names to weights
+    names(portfolio$assets$weight) <- names(top_run_stocks)
+
     ###################################################################
     
     ## 4. Portfolio Rebalance
@@ -223,14 +231,22 @@ system.time({
     # extract tickers from portfolio (once again, different portfolio)
     portf_tickers <- portfolio$assets$tickers # new tickers chosen by modelling
     
+    # retrieve current prices for assets in portfolio 
+    portf_prices <- unlist(compact(sapply(portf_tickers, function(x){
+      f_read_stock_price(x, sp500_stocks_flat, cur_date)
+    })))
+    
+    # ensure only valid stocks are kept 
+    portf_tickers <- portf_tickers[names(portf_prices)]
+    portfolio$assets$tickers <- portf_tickers
+    
+    # reweight weights accordingly 
+    portfolio$assets$weight <- portfolio$assets$weight[names(portf_prices)]
+    portfolio$assets$weight <- portfolio$assets$weight / sum(portfolio$assets$weight)
+    
     # calculate how much money to put per share 
     weighted_capital <- portfolio$assets$weight * portfolio$capital 
     names(weighted_capital) <- portf_tickers
-    
-    # retrieve current prices for assets in portfolio 
-    portf_prices <- sapply(portf_tickers, function(x){
-      f_read_stock_price(x, sp500_stocks_flat, cur_date)
-    })
     
     # calculate number of shares of the portfolio (how much we invested)
     portfolio$assets$num_shares <- weighted_capital / portf_prices
@@ -245,11 +261,7 @@ system.time({
     print("(4) LONG PORTFOLIO()")
     
     #######################################################################
-    
-    # TEST: Just for this small printing simulation !!
-    if(tau > 4){
-      break
-    }
+
     print("-------------------------------------------------------------")
   }
 })
@@ -261,3 +273,66 @@ print(portfolio$returns)
 print(portfolio$capital_history)
 
 
+###############################
+### 4. Plots & Benchmarking ###
+###############################
+
+# pack the results into a dataframe 
+portf_df <- as.data.frame(cbind(portfolio$dates,
+                                portfolio$capital_history, 
+                                portfolio$returns
+                                ))
+portf_df <- na.trim(portf_df)
+colnames(portf_df) <- c("date", "capital", "discrete_returns")
+
+# convert to xts 
+portf_xts <- as.xts(portf_df, order.by = as.Date(portf_df$date))
+portf_xts$date <- NULL
+
+# add the log returns 
+portf_xts$discrete_returns <- as.numeric(portf_xts$discrete_returns)
+portf_xts$log_returns <- log(as.numeric(portf_xts$discrete_returns) + 1)
+
+# Download weekly prices of Apple spanning
+SP500 <- getSymbols(Symbols = "^GSPC", # symbol
+                   src = "yahoo", # source: yahoo finance
+                   from = "2016-01-01",
+                   to = "2023-01-01",
+                   periodicity = "daily", 
+                   auto.assign = FALSE # prevents overwriting existing objects in env 
+)
+
+# choose only valid dates  and assign to portfolio 
+SP500 <- SP500[index(portf_xts)]
+portf_xts$sp500_discrete_rets <- Return.calculate(prices = SP500[, 6], method = "discrete")
+portf_xts$sp500_log_rets <- Return.calculate(prices = SP500[, 6], method = "log")
+portf_xts <- na.fill(portf_xts, 0)
+
+# Visualize portfolio performance using PerformanceSummary chart
+ret_cols <- c("discrete_returns", "log_returns", "sp500_discrete_rets", "sp500_log_rets")
+charts.PerformanceSummary(R = portf_xts[, ret_cols],
+                          wealth.index = TRUE,
+                          main = "MLR-RF-Sharpe Min-Var Portfolio Performance")
+
+
+# Visualize Portfolio Drawdown 
+chart.Drawdown(
+  R = portf_xts[, c(2,4)],
+  geometric = TRUE,
+  legend.loc = "topleft",
+  colorset = (1:12),
+  plot.engine = "default",
+  main = "MLR-RF-Sharpe Min-Var Portfolio Drawdown"
+)
+
+# Visualize capital evolution through time 
+plot(portf_xts$capital, 
+     yaxis.right = FALSE, 
+     legend.loc = "topleft", # legend on the top left of the chart
+     main = "Portfolio Capital Evolution",
+     xlab = "Date", 
+     ylab = "Capital", 
+     col = "blue", 
+     major.ticks = "weeks",
+     grid.ticks.on = "weeks",
+     grid.ticks.lty = 2)

@@ -15,9 +15,6 @@ f_extract_ret_fore <- function(data, column_name = "best_shifted_arima") {
   
   require("xts")
   
-  # Define the column name
-  column_name <- column_name
-  
   # Extract and merge columns that match the given name across all xts objects in the list
   returns_fore <- do.call(merge, lapply(data, function(x) x[, grep(column_name, colnames(x)), drop = FALSE]))
   
@@ -36,9 +33,6 @@ f_extract_vol_fore <- function(data, returns_fore_index,  column_name ="vol_fore
   ## Function to extract the xts object for forecasted volatility from a list of xts objects
   
   require("xts")
-  
-  # Define the column name
-  column_name <- column_name
   
   # Extract and merge columns that match the given name across all xts objects in the list
   vol_fore <- do.call(merge, lapply(data, function(x) x[, grep(column_name, colnames(x)), drop = FALSE]))
@@ -143,11 +137,22 @@ f_optimize_portfolio <- function(top_sector_stocks, min_alloc = 0.05){
   }
   
   # Perform min-variance portfolio optimization 
-  output <- quadprog::solve.QP(Dmat = cov_matrix, # covariance matrix to be minimized
-                               dvec = mean_returns, # minimum returns
-                               Amat = cbind(matrix(rep(1,length(mean_returns)), ncol = 1), diag(length(mean_returns))),
-                               bvec = c(1, rep(min_alloc,length(mean_returns))), # sum of weights = 1 & no short selling
-                               meq = 1)
+  output <- tryCatch({
+    quadprog::solve.QP(Dmat = cov_matrix, # covariance matrix to be minimized
+                       dvec = mean_returns, # minimum returns
+                       Amat = cbind(matrix(rep(1,length(mean_returns)), ncol = 1), diag(length(mean_returns))),
+                       bvec = c(1, rep(min_alloc,length(mean_returns))), # sum of weights = 1 & no short selling
+                       meq = 1)
+  }, error = function(e){
+    print("(f_optimize_portfolio) -->error in portfolio optimization, default equally weighted portfolio returned.")
+    return(NULL)
+  })
+  
+  # if error in  optimization, return equally weighted porf 
+  if (is.null(output)){
+    return(rep(1/length(mean_returns), length(mean_returns)))
+  }
+  
   # Weights allocated
   weights_mv <- output$solution
   names(weights_mv) <- names(mean_returns)

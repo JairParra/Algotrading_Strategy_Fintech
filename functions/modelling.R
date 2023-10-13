@@ -27,9 +27,11 @@ f_select_top_stocks <- function(sector_tracker, n=3){
   ##    - n (int): number of top stocks to choos efor each method. Top n for the predicted returns, 
   ##              and top n for the sharpe-based. 
   
-  # Extract the top n tickers with the highest Sharpe ratio
+  # Extract the top n tickers with the highest Sharpe ratio and forecasted return
   top_sharpe <- names(sort(sapply(sector_tracker, function(x) x$sharpe), decreasing=TRUE))[1:n]
   top_fore_rets <- names(sort(sapply(sector_tracker, function(x) x$forecasted_ret), decreasing=TRUE))[1:n]
+  
+  # Filter stocks forecasted stocks with only positive performance 
   
   # Concat in one list 
   top_tickers  <- union(top_sharpe, top_fore_rets) 
@@ -224,7 +226,7 @@ f_fit_models <- function(list_xts_sector,
     
 
     # Extract only the forecast for next week (one week ahead) 
-    direction_forecast <- ifelse(mean(direction_forecast$up) > 0.5, "up", "down")
+    direction_forecast <- ifelse(mean(direction_forecast$up) > 0.4, "up", "down")
     
     ###########################################################################
     
@@ -239,7 +241,7 @@ f_fit_models <- function(list_xts_sector,
     # Calculate the ES and set risk-free 
     VaR <- quantile(hist_returns, 0.05) 
     ES <- mean(hist_returns[hist_returns < VaR])
-    Rf <- 0.0002 # 0 
+    Rf <- 0.00 # 0 
     
     # Calculate the Sharpe and MSR
     stock_sharpe <- ((mean_rets- Rf)/ std_rets ) * sqrt(scaling_factor) # annualized
