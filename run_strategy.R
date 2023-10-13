@@ -12,15 +12,19 @@
 # Simplifications & Assumptions: 
 # 1. No short-sales
 # 2. No leverage 
-# 3. Fractional sell allowed for all shares 
+# 3. Fractional trades allowed for all shares 
 # 4. No transaction costs 
 # 
-# Notes: 
+# Notes:  
+#   - [tau, tau + window - 1] = 2 years ("strategy windows")
 #   - Every run tau symbolizes that we took the past 2 years of data, and 
 #     we run the strategy to rebalance our portfolio. 
 #   - Once rebalanced, we hold for one month.
 #   - At the next run (determined by tau), we calculate the P&L of portfolio performance
 #     and run the strategy again.
+#
+#   Prev month: [tau + window - 1] -> long (take some positions)
+#   Cur month: [tau + window] -> close positions (P&L, etc) & rebalance 
 ################################################################################
 
 ####################
@@ -41,7 +45,7 @@ source(here("functions", "portfolio_optimization.R")) # functions for top stocks
 #######################
 
 # Load preprocessed data from the data_clean directory 
-load(here("data_clean", "sp500_stocks.rda"))
+load(here("data_clean", "sp500_stocks.rda")) # comes from running: run_data.R
 
 # create flattened version for ease (delete middle nested list layer)
 sp500_stocks_flat <- sp500_stocks
@@ -58,7 +62,7 @@ sectors <- names(sp500_stocks)
 N_sector_max_best_stocks <- 6 # maximum number of stocks to choose, but never reached in practice
 
 # Formula parameters
-slide <- 1 # moving one month at the time
+slide <- 1 # moving one month at the time (monthly rebalancing)
 N_months <- length(names(split.xts(sample_xts, f= "months"))) # total number of months 
 N_window <- 24 # number of months in size for each window (2 years)
 N_runs <- floor((N_months - N_window)/slide) # total number of runs/taus
@@ -70,7 +74,7 @@ weights <- rep(1/num_tickers, num_tickers) # initialize to 1/n
 returns <- rep(NA, N_runs) # returns for the portfolio across time 
 rebalance_dates <- rep("", N_runs) # rebalance dates
 capital_history <- rep(NA, N_runs) # keeps track of the capital at every step 
-stop_loss <- initial_capital*0.25 # half of the capital lost 
+stop_loss <- initial_capital*0.25 # 1/4 of the initial capital lost 
 
 # repack the portfolio for tracking 
 # Note: 
@@ -116,18 +120,18 @@ system.time({
       break 
     }
   
-    ##################################################################
-    ## 1. Obtain current positions
-    
-    # get current date with the tau 
-    cur_date <- sp500_stocks_flat[[1]][sp500_stocks_flat[[1]]$month_index == tau + N_window - 1 + 1]
-    cur_date <- head(index(cur_date), 1)
+    # ##################################################################
+    # ## 1. Obtain current date
+    # 
+    # # get current date with the tau 
+    # cur_date <- sp500_stocks_flat[[1]][sp500_stocks_flat[[1]]$month_index == tau + N_window - 1 + 1]
+    # cur_date <- head(index(cur_date), 1)
     
     ##################################################################
     ## 1. Close Positions 
     
     # close any positions 
-    print("1. CLOSE all positions")
+    print("1. CLOSE all positions & P&L")
     
     # get current date with the tau and update in portfolio 
     cur_date <- sp500_stocks_flat[[1]][sp500_stocks_flat[[1]]$month_index == tau + N_window]
@@ -217,7 +221,7 @@ system.time({
     ## 4. Portfolio Rebalance
     
     # extract tickers from portfolio (once again, different portfolio)
-    portf_tickers <- portfolio$assets$tickers
+    portf_tickers <- portfolio$assets$tickers # new tickers chosen by modelling
     
     # calculate how much money to put per share 
     weighted_capital <- portfolio$assets$weight * portfolio$capital 
@@ -228,7 +232,7 @@ system.time({
       f_read_stock_price(x, sp500_stocks_flat, cur_date)
     })
     
-    # calculate number of shares of the portfolio 
+    # calculate number of shares of the portfolio (how much we invested)
     portfolio$assets$num_shares <- weighted_capital / portf_prices
 
     #########################################################################
@@ -250,7 +254,10 @@ system.time({
   }
 })
 
+# display summary 
 print("SUMMARY:") 
 print(portfolio$dates)
 print(portfolio$returns)
 print(portfolio$capital_history)
+
+

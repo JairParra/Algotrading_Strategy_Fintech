@@ -108,7 +108,8 @@ f_optimize_portfolio <- function(top_sector_stocks, min_alloc = 0.05){
   require("PerformanceAnalytics")
   
   # Get the data frame for returns
-  returns_fore <- f_extract_ret_fore(top_sector_stocks, column_name = "best_shifted_arima")
+  returns_fore <- f_extract_ret_fore(top_sector_stocks,
+                                     column_name = "best_shifted_arima") # forecasted returns with SARIMA
   
   # to check if there are any NA
   if(sum(is.na(returns_fore))){
@@ -119,7 +120,8 @@ f_optimize_portfolio <- function(top_sector_stocks, min_alloc = 0.05){
   returns_fore_index <- index(returns_fore)
   
   # Get the data frame for volatility forecast
-  volatility_fore <- f_extract_vol_fore(top_sector_stocks, column_name =  "vol_forecast")
+  volatility_fore <- f_extract_vol_fore(top_sector_stocks, 
+                                        column_name =  "vol_forecast") # forecasted volatility with GARCH
   
   # keep only rows that didn't have NAs
   volatility_fore <- volatility_fore[returns_fore_index] 

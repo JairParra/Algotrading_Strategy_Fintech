@@ -284,8 +284,7 @@ f_MODELLING_PROCEDURE <- function(G, tau, sp500_stocks, best_n = 3, model_type =
   ##    - Computes dynamic features for all stocks in the sector 
   ##    - Loops through every ticker, performing feature selection, hyperparameter 
   ##      tuning and model selection, produces forecasts and calculates a number of metrics. 
-  ##    - Store the result in an object `sector_tracker`
-  ##    - Chooses the best n stocks based on two criteria: best forecasted returns, 
+  ##    - Chooses the best n stocks based on two criteria: best forecasted returns, classification
   ##      and best historical Sharpe Ratio. 
   ##
   ##  Params: 
