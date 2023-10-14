@@ -10,22 +10,19 @@
 ### 1. Data Manipulation for Optimization ###
 #############################################
 
-# Helper function to extract  columns from each xts dataframe
-f_extract_column <- function(df, column_name) {
-  if(column_name %in% colnames(df)) {
-    return(df[, 'best_shifted_arima'])
-  } else {
-    return(NULL)
-  }
-}
-
 f_extract_ret_fore <- function(data, column_name = "best_shifted_arima") {
   ## Function to extract the xts object for forecasted returns from a list of xts objects
   
   require("xts")
   
   # Use lapply to extract these columns for all dataframes
-  extracted_col_list <- lapply(data, f_extract_column, column_name = column_name)
+  extracted_col_list <- lapply(data, function(df) {
+    if(column_name %in% colnames(df)) {
+      return(df[, 'best_shifted_arima'])
+    } else {
+      return(NULL)
+    }
+  })
   
   # Remove NULLs if any
   extracted_col_list <- Filter(Negate(is.null), extracted_col_list)
@@ -50,7 +47,13 @@ f_extract_vol_fore <- function(data, column_name ="vol_forecast") {
   require("xts")
   
   # Use lapply to extract these columns for all dataframes
-  extracted_col_list <- lapply(data, f_extract_column, column_name = column_name)
+  extracted_col_list <- lapply(data, function(df) {
+    if(column_name %in% colnames(df)) {
+      return(df[, 'best_shifted_arima'])
+    } else {
+      return(NULL)
+    }
+  })
   
   # Remove NULLs if any
   extracted_col_list <- Filter(Negate(is.null), extracted_col_list)

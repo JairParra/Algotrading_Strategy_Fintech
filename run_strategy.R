@@ -44,6 +44,12 @@ source(here("functions", "strategy.R")) # modelling general strategy
 source(here("functions", "portfolio_optimization.R")) # functions for top stocks and economic sectors in the sp500
 source(here("functions", "plotting.R")) # modelling general strategy 
 
+# Increase the penalty for using scientific notation
+options(scipen = 999)
+
+# Set the number of digits to display to 6
+options(digits = 6)
+
 #######################
 ### 1. Data Loading ###
 #######################
@@ -219,7 +225,7 @@ system.time({
       portfolio$assets$tickers <- sample(names(sp500_stocks_flat), 15)
     })
     
-    print("---> chosen stocks after optimization: ")
+    print("---> chosen stocks after modelling: ")
     print(portfolio$assets$tickers)
     
     # record portfolio histu selection
@@ -254,6 +260,9 @@ system.time({
       return(NULL)
     })
     
+    # ensure positive weights 
+    optimal_minvar_weights[optimal_minvar_weights < 0] <- 0.005
+    
     # assign weights
     if(!is.null(optimal_minvar_weights)){
       portfolio$assets$weight <- optimal_minvar_weights
@@ -278,8 +287,7 @@ system.time({
     })))
     
     # ensure only valid stocks are kept (the portf_prices might introduce NAs)
-    portf_tickers <- intersect(portf_tickers, names(portf_prices))
-    portfolio$assets$tickers <- portf_tickers
+    portfolio$assets$tickers <- intersect(portf_tickers, names(portf_prices))
     portfolio$assets$tickers <- intersect(portfolio$assets$tickers, names(portfolio$assets$weight))
     
     # reweight weights accordingly 
@@ -291,10 +299,10 @@ system.time({
     
     # calculate how much money to put per share 
     weighted_capital <- portfolio$assets$weight * portfolio$capital 
-    names(weighted_capital) <- portfolio$assets$weight
+    names(weighted_capital) <- names(portfolio$assets$weight)
     
     # calculate number of shares of the portfolio (how much we invested)
-    portfolio$assets$num_shares <- weighted_capital / portfolio$assets$weight
+    portfolio$assets$num_shares <- weighted_capital / portf_prices
 
     #########################################################################
     
@@ -308,8 +316,10 @@ system.time({
     #######################################################################
     
     # plot evolution 
-    portf_xts <- f_prepare_data(portfolio)
-    f_plot_performance(portf_xts)
+    if(tau > 1){
+      portf_xts <- f_prepare_data(portfolio)
+      f_plot_performance(portf_xts)
+    }
 
     print("-------------------------------------------------------------")
   }
