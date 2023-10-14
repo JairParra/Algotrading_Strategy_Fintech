@@ -30,7 +30,7 @@ f_select_top_stocks <- function(sector_tracker, n=3){
   # Extract the top n tickers with the highest Sharpe ratio and forecasted return
   top_sharpe <- names(sort(sapply(sector_tracker, function(x) x$sharpe), decreasing=TRUE))[1:n]
   top_fore_rets <- names(sort(sapply(sector_tracker, function(x) x$forecasted_ret), decreasing=TRUE))[1:n]
-  top_fore_dir <- names(sapply(sector_tracker, function(x) x[x$forecasted_direction == "up"]))[1:n]
+  top_fore_dir <- names(lapply(sector_tracker,function(x){x[x$forecasted_direction == "up"]}))
   
   # Filter stocks forecasted stocks with only positive performance
   

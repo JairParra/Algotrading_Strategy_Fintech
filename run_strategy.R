@@ -219,6 +219,9 @@ system.time({
       portfolio$assets$tickers <- sample(names(sp500_stocks_flat), 15)
     })
     
+    print("---> chosen stocks after optimization: ")
+    print(portfolio$assets$tickers)
+    
     # record portfolio histu selection
     portfolio$portf_history[[tau]] <- portfolio$assets$tickers
     
@@ -256,6 +259,9 @@ system.time({
       portfolio$assets$weight <- optimal_minvar_weights
     }
     
+    # filter out top_run_stocks since name-value pairs might have been filtered
+    top_run_stocks <- top_run_stocks[names(portfolio$assets$weight)]
+    
     # assign names to weights 
     names(portfolio$assets$weight) <- names(top_run_stocks)
 
@@ -271,12 +277,13 @@ system.time({
       f_read_stock_price(x, sp500_stocks_flat, cur_date)
     })))
     
-    # ensure only valid stocks are kept 
+    # ensure only valid stocks are kept (the portf_prices might introduce NAs)
     portf_tickers <- intersect(portf_tickers, names(portf_prices))
     portfolio$assets$tickers <- portf_tickers
+    portfolio$assets$tickers <- intersect(portfolio$assets$tickers, names(portfolio$assets$weight))
     
     # reweight weights accordingly 
-    portfolio$assets$weight <- portfolio$assets$weight[portf_tickers]
+    portfolio$assets$weight <- portfolio$assets$weight[portfolio$assets$tickers]
     portfolio$assets$weight <- portfolio$assets$weight / sum(portfolio$assets$weight)
     
     # record portfolio weights for that run 
@@ -284,10 +291,10 @@ system.time({
     
     # calculate how much money to put per share 
     weighted_capital <- portfolio$assets$weight * portfolio$capital 
-    names(weighted_capital) <- portf_tickers
+    names(weighted_capital) <- portfolio$assets$weight
     
     # calculate number of shares of the portfolio (how much we invested)
-    portfolio$assets$num_shares <- weighted_capital / portf_prices
+    portfolio$assets$num_shares <- weighted_capital / portfolio$assets$weight
 
     #########################################################################
     

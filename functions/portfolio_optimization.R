@@ -10,16 +10,31 @@
 ### 1. Data Manipulation for Optimization ###
 #############################################
 
+# Helper function to extract  columns from each xts dataframe
+f_extract_column <- function(df, column_name) {
+  if(column_name %in% colnames(df)) {
+    return(df[, 'best_shifted_arima'])
+  } else {
+    return(NULL)
+  }
+}
+
 f_extract_ret_fore <- function(data, column_name = "best_shifted_arima") {
   ## Function to extract the xts object for forecasted returns from a list of xts objects
   
   require("xts")
   
-  # Extract and merge columns that match the given name across all xts objects in the list
-  returns_fore <- do.call(merge, lapply(data, function(x) x[, grep(column_name, colnames(x)), drop = FALSE]))
+  # Use lapply to extract these columns for all dataframes
+  extracted_col_list <- lapply(data, f_extract_column, column_name = column_name)
   
-  # Set the column names of the merged xts object
-  colnames(returns_fore) <- names(data)
+  # Remove NULLs if any
+  extracted_col_list <- Filter(Negate(is.null), extracted_col_list)
+  
+  # Use do.call with merge.xts to combine all these extracted columns into a new xts dataframe
+  returns_fore <- na.trim(do.call(merge, args = c(extracted_col_list)))
+  
+  # reassign names
+  names(returns_fore) <- names(extracted_col_list)
   
   # Append the month_index column from the first xts object in the list
   returns_fore <- cbind(returns_fore, data[[1]]$month_index)
@@ -29,19 +44,25 @@ f_extract_ret_fore <- function(data, column_name = "best_shifted_arima") {
 }
 
 
-f_extract_vol_fore <- function(data, returns_fore_index,  column_name ="vol_forecast") {
+f_extract_vol_fore <- function(data, column_name ="vol_forecast") {
   ## Function to extract the xts object for forecasted volatility from a list of xts objects
   
   require("xts")
   
-  # Extract and merge columns that match the given name across all xts objects in the list
-  vol_fore <- do.call(merge, lapply(data, function(x) x[, grep(column_name, colnames(x)), drop = FALSE]))
+  # Use lapply to extract these columns for all dataframes
+  extracted_col_list <- lapply(data, f_extract_column, column_name = column_name)
   
-  # Set the column names of the merged xts object
-  colnames(vol_fore) <- names(data)
+  # Remove NULLs if any
+  extracted_col_list <- Filter(Negate(is.null), extracted_col_list)
+  
+  # Use do.call with merge.xts to combine all these extracted columns into a new xts dataframe
+  vol_fore <- na.trim(do.call(merge, args = c(extracted_col_list)))
+  
+  # reassign names
+  names(vol_fore) <- names(extracted_col_list)
   
   # Append the month_index column from the first xts object in the list
-  vol_fore <- cbind(vol_fore, data[[1]]$month_index)
+  returns_fore <- cbind(vol_fore, data[[1]]$month_index)
   
   # Return the merged xts object
   return(vol_fore)

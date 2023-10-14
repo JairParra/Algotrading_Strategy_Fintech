@@ -25,6 +25,9 @@ source(here("functions", "feature_engineering.R")) # functions for feat eng and 
 ### 1. Data Load and Preprocessing ###
 ######################################
 
+# Needed in the scope of all other functions
+library("here")
+f_load_csv_from_zip(here("data", "data.zip"))
 
 # load sp500 data into env
 sp500 <- f_load_sp500() # dSP500 components and weights from yahoo finance

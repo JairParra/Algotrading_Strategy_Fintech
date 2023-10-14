@@ -46,7 +46,7 @@ f_load_csv_from_zip <- function(zip_file_path) {
 
 # Needed in the scope of all other functions 
 library("here")
-f_load_csv_from_zip(here("data", "raw_data.zip"))
+f_load_csv_from_zip(here("data", "data.zip"))
 
 
 f_preload_raw_data <- function(from="2016-01-01", to="2022-12-31"){
