@@ -1,6 +1,9 @@
 # Algotrading_Strategy_Fintech
 The objective is to create a realistic investment strategy based on several machine learning techniques seen during the masters course *Machine Learning Applied to Financial Data*, at HEC Montréal.
 
+# Disclaimer
+This repository was built as a part of a course webproject, and the data and techniques assume rather unrealistic constraints that would make the strategy completely unprofitable and extremely risky in real life. 
+The contents of this repository do not constitute by any means any financial advise and **we waive ourselves from all legal liability** in the use or misuse of this stategy. 
 
 # Trading Strategy 
 
