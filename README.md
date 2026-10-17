@@ -42,14 +42,7 @@ These features have two goals: (i) to create informative predictive features use
 Subsequent to feature selection, an Elastic Net regression model was implemented, which seamlessly blends the penalties from both Lasso and Ridge regression, succinctly expressed by the following objective function: 
 
 $$
-\underset{\beta}{\min}
-\dfrac{1}{N}
-\sum_{i=1}^{N}\ell (y_i, x_{i}^T\beta)
-+ 
-\lambda\left[
-  \alpha ||\beta||_1 
-  + \dfrac{1}{2}(1-\alpha)||\beta||_{2}^{2}
-\right]
+\underset{\beta}{\min} \dfrac{1}{N} \sum_{i=1}^{N}\ell (y_i, x_{i}^T\beta) + \lambda\left[ \alpha ||\beta||_1 + \dfrac{1}{2}(1-\alpha)||\beta||_{2}^{2} \right]
 $$
 
 ## Random Forests 
@@ -74,13 +67,13 @@ In our case, $C=2$, since we are predicting the direction of the historical retu
 To choose the best performing stocks, we combine these methods along with the historical Sharpe ratio using the following heuristic:  
 
 $$
-\text{Choose stock }x \text{ if }
+\text{Choose stock } x \text{ if }
 \begin{cases}
-    \texttt{forecasted\_return > 0 \& forecasted\_direction == "up"} \\ 
-    \texttt{OR} \\ 
-    \texttt{sharpe\_ratio > 0.3 \& forecasted\_direction == "up"} \\ 
-    \texttt{OR} \\ 
-    \texttt{sharpe\_ratio > 0.5}
+\text{forecasted}\_\text{return} > 0 \quad \& \quad \text{forecasted}\_\text{direction} = \text{"up"} \\
+\text{OR} \\
+\text{sharpe}\_\text{ratio} > 0.3 \quad \& \quad \text{forecasted}\_\text{direction} = \text{"up"} \\
+\text{OR} \\
+\text{sharpe}\_\text{ratio} > 0.5
 \end{cases}
 $$
 
